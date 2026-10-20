@@ -10,7 +10,7 @@ const cli = join(root, "dist/cli.js");
 const projects: string[] = [];
 
 beforeAll(() => {
-  execFileSync(process.execPath, [join(root, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.build.json"], { cwd: root });
+  execFileSync(process.execPath, [fileURLToPath(import.meta.resolve("typescript/bin/tsc")), "-p", "tsconfig.build.json"], { cwd: root });
 });
 
 test("help works without source files or a coverage setup", () => {

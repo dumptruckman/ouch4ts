@@ -10,7 +10,7 @@ Use the bundled analyzer's full-function scores to explain change risk.
 ## Prepare
 
 1. Inspect the target project's source roots, test scripts, package manager, and runtime requirements. Keep its existing test runner. Read [coverage setup](references/coverage.md) when configuring LCOV or investigating source-map problems.
-2. Resolve this skill's directory to an absolute path. Packaged installs include `dist/cli.js`. For a source checkout, use `nvm use` in the skill directory, install dependencies with `npm ci` if needed, and run `npm run build`.
+2. Resolve this skill's directory to an absolute path. npm package installs include `dist/cli.js`. For a skills.sh or source install, use `nvm use` in the skill directory, install dependencies with `npm ci` if needed, and run `npm run build`. Reuse that build on later invocations.
 3. Run from the target project directory. The analyzer needs Node 22 or newer. Keep the project's runtime when generating coverage; with an older project runtime, generate coverage first and use a compatible Node for `--use-existing-coverage`.
 
 ## Choose the report
@@ -31,6 +31,6 @@ Replace `/path/to/crap4ts` with the resolved skill directory. Use `--help` for o
 
 Report the largest current scores and score increases with function locations. Explain whether complexity or coverage drives each result. Scores below 5 indicate low measured risk; 5 to below 30 suggest focused tests or simpler control flow; 30 or more deserve priority before changes. These are heuristics.
 
-`N/A` means coverage is indeterminate. Check coverage inclusion, paths, and source maps before attributing it to missing tests. LCOV measures executable lines; shared lines can share hits, and coverage does not establish useful assertions or full branch coverage. Use the runner's detailed report to investigate suspicious scores. See [measurement conventions](README.md#measurement-conventions) when those details matter.
+`N/A` means coverage is indeterminate. Check coverage inclusion, paths, and source maps before attributing it to missing tests. LCOV measures executable lines; shared lines can share hits, and coverage does not establish useful assertions or full branch coverage. Use the runner's detailed report to investigate suspicious scores. See [measurement conventions](references/measurement.md) when those details matter.
 
 Normal runs save all analyzed functions in `.metrics/crap.json`. `--since` and path filters affect the displayed table. A report request authorizes analysis; propose tests or refactoring and perform those changes when requested.

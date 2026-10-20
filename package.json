@@ -1,40 +1,12 @@
 {
-  "name": "crap4ts",
-  "version": "0.1.0",
-  "description": "CRAP scores for TypeScript functions, with an agent skill",
-  "type": "module",
-  "bin": {
-    "crap4ts": "dist/cli.js"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist",
-    "SKILL.md",
-    "agents",
-    "references"
-  ],
-  "engines": {
-    "node": ">=22"
-  },
+  "name": "crap4ts-workspace",
+  "private": true,
+  "workspaces": ["skills/crap4ts"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "crap": "npm run build --silent && node dist/cli.js",
-    "prepack": "npm run build"
-  },
-  "dependencies": {
-    "typescript": "6.0.3"
-  },
-  "devDependencies": {
-    "@types/node": "24.19.2",
-    "@vitest/coverage-v8": "5.0.5",
-    "vitest": "5.0.5"
+    "build": "npm run build --workspace crap4ts",
+    "typecheck": "npm run typecheck --workspace crap4ts",
+    "test": "npm run test --workspace crap4ts --",
+    "test:coverage": "npm run test:coverage --workspace crap4ts",
+    "crap": "npm run crap --workspace crap4ts --"
   }
 }
