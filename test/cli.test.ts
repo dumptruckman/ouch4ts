@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,6 +112,231 @@ function commit(cwd: string, message: string) {
   git(cwd, "add", ".");
   git(cwd, "commit", "-qm", message);
 }
+
+function comparisonProject(extraFiles: Record<string, string> = {}, prefix = "") {
+  const before = "export function price(vip: boolean) {\n  if (vip) return 1;\n  return 2;\n}\n\nexport const stable = () => 4;\nexport const removed = () => 0;\nexport function callbacks() {\n  return [1].map(value => value + 1);\n}\n";
+  const files = {
+    "src/orders.ts": before,
+    "revision.txt": "base",
+    "lines.json": JSON.stringify([[2, 1], [3, 0], [6, 1], [7, 0], [9, 1]]),
+    "source-file.txt": "src/orders.ts",
+    ...extraFiles,
+  };
+  const repository = project(Object.fromEntries(Object.entries(files).map(([name, content]) => [join(prefix, name), content])));
+  const cwd = join(repository, prefix);
+  const log = JSON.stringify(join(cwd, "calls.log"));
+  writeFileSync(join(cwd, "setup.cjs"), `const fs = require('node:fs');
+fs.writeFileSync('setup.done', 'yes');
+fs.appendFileSync(${log}, JSON.stringify({ phase: 'setup', revision: fs.readFileSync('revision.txt', 'utf8'), cwd: process.cwd() }) + '\\n');`);
+  writeFileSync(join(cwd, "cover.cjs"), `const fs = require('node:fs');
+if (!fs.existsSync('setup.done')) process.exit(2);
+fs.mkdirSync('coverage', { recursive: true });
+const lines = JSON.parse(fs.readFileSync('lines.json', 'utf8'));
+const source = fs.readFileSync('source-file.txt', 'utf8');
+fs.writeFileSync('coverage/lcov.info', 'SF:' + process.cwd() + '/' + source + '\\n' + lines.map(([line, hits]) => 'DA:' + line + ',' + hits + '\\n').join('') + 'end_of_record\\n');
+fs.appendFileSync(${log}, JSON.stringify({ phase: 'coverage', revision: fs.readFileSync('revision.txt', 'utf8'), cwd: process.cwd() }) + '\\n');`);
+  git(repository, "init", "-q", "--initial-branch=main");
+  commit(repository, "Base");
+  git(cwd, "branch", "base");
+  writeFileSync(join(cwd, "src/orders.ts"), before.replace("removed = () => 0", "added = () => 5"));
+  writeFileSync(join(cwd, "revision.txt"), "head");
+  writeFileSync(join(cwd, "lines.json"), JSON.stringify([[2, 1], [3, 1], [6, 1], [7, 1], [9, 1]]));
+  commit(cwd, "Head");
+  return cwd;
+}
+
+function runComparison(cwd: string, ...args: string[]) {
+  return run(cwd, "--compare", "base", "--setup-command", "node setup.cjs", "--coverage-command", "node cover.cjs", ...args);
+}
+
+test("compare scores committed base and head in isolated checkouts and reports metric changes", () => {
+  const cwd = comparisonProject();
+  const head = git(cwd, "rev-parse", "HEAD").trim();
+  const base = git(cwd, "rev-parse", "base").trim();
+  git(cwd, "checkout", "-qb", "target", "base");
+  writeFileSync(join(cwd, "revision.txt"), "target");
+  commit(cwd, "Advance target");
+  git(cwd, "checkout", "-q", "main");
+  const localEdit = "export function uncommitted( {";
+  writeFileSync(join(cwd, "src/orders.ts"), localEdit);
+  const result = runComparison(cwd, "--compare", "target");
+  expect(result.status, result.stderr).toBe(0);
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  expect(report).toMatchObject({ base, head, entries: expect.arrayContaining([
+    { name: "price", file: "src/orders.ts", status: "changed",
+      base: expect.objectContaining({ complexity: 2, coverage: 50, crap: 2.5 }),
+      head: expect.objectContaining({ complexity: 2, coverage: 100, crap: 2 }),
+      delta: { complexity: 0, coverage: 50, crap: -0.5 } },
+    { name: "added", file: "src/orders.ts", status: "added", base: null,
+      head: expect.objectContaining({ crap: 1 }), delta: { complexity: null, coverage: null, crap: null } },
+    { name: "removed", file: "src/orders.ts", status: "removed", head: null,
+      base: expect.objectContaining({ crap: 2 }), delta: { complexity: null, coverage: null, crap: null } },
+  ]) });
+  expect(report.entries).toHaveLength(3);
+  expect(result.stdout).toContain("price");
+  expect(result.stdout).toContain("-0.5");
+  expect(result.stdout).not.toContain("stable");
+  const calls: { phase: string; revision: string; cwd: string }[] = readFileSync(join(cwd, "calls.log"), "utf8")
+    .trim().split("\n").map(line => JSON.parse(line));
+  expect(calls.map(({ phase, revision }) => `${phase}:${revision}`)).toEqual([
+    "setup:base", "coverage:base", "setup:head", "coverage:head",
+  ]);
+  expect(calls.every(call => call.cwd !== cwd && !existsSync(call.cwd))).toBe(true);
+  expect(git(cwd, "rev-parse", "HEAD").trim()).toBe(head);
+  expect(readFileSync(join(cwd, "src/orders.ts"), "utf8")).toBe(localEdit);
+});
+
+test("compare reuses commit reports until refresh is requested", () => {
+  const cwd = comparisonProject();
+  const first = runComparison(cwd);
+  expect(first.status, first.stderr).toBe(0);
+  const report = readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8");
+  const calls = readFileSync(join(cwd, "calls.log"), "utf8");
+  const second = runComparison(cwd, "missing-file");
+  expect(second.status, second.stderr).toBe(0);
+  expect(second.stdout).not.toContain("price");
+  expect(readFileSync(join(cwd, "calls.log"), "utf8")).toBe(calls);
+  expect(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).toBe(report);
+  const cache = readdirSync(join(cwd, ".metrics/cache"));
+  expect(cache).toHaveLength(2);
+  expect(cache.some(name => name.includes(git(cwd, "rev-parse", "base").trim()))).toBe(true);
+  expect(cache.some(name => name.includes(git(cwd, "rev-parse", "HEAD").trim()))).toBe(true);
+
+  const refreshed = runComparison(cwd, "--refresh");
+  expect(refreshed.status, refreshed.stderr).toBe(0);
+  expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
+});
+
+test("comparison cache separates coverage settings and regenerates a damaged commit report", () => {
+  const cwd = comparisonProject();
+  expect(runComparison(cwd).status).toBe(0);
+  const cacheDir = join(cwd, ".metrics/cache");
+  const original = readdirSync(cacheDir);
+  const changed = runComparison(cwd, "--coverage-command", "node ./cover.cjs");
+  expect(changed.status, changed.stderr).toBe(0);
+  expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
+  const head = git(cwd, "rev-parse", "HEAD").trim();
+  const damaged = readdirSync(cacheDir).find(name => !original.includes(name) && name.includes(head));
+  expect(damaged).toBeDefined();
+  writeFileSync(join(cacheDir, damaged!), '{"entries":"invalid"}');
+  const repaired = runComparison(cwd, "--coverage-command", "node ./cover.cjs");
+  expect(repaired.status, repaired.stderr).toBe(0);
+  expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(10);
+  expect(JSON.parse(readFileSync(join(cacheDir, damaged!), "utf8")).entries).toHaveLength(5);
+});
+
+test("failed comparison coverage preserves the previous report and cleans up its checkout", () => {
+  const cwd = comparisonProject();
+  expect(runComparison(cwd).status).toBe(0);
+  const original = readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8");
+  writeFileSync(join(cwd, "cover.cjs"), "process.exit(9);");
+  git(cwd, "add", "cover.cjs");
+  git(cwd, "commit", "-qm", "Break coverage");
+  const failed = runComparison(cwd);
+  expect(failed.status).toBe(1);
+  expect(failed.stderr).toContain("Coverage command failed: 9");
+  expect(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).toBe(original);
+  expect(readdirSync(join(cwd, ".metrics/cache"))).toHaveLength(2);
+  expect(git(cwd, "worktree", "list", "--porcelain").split("\n").filter(line => line.startsWith("worktree "))).toHaveLength(1);
+});
+
+test.each([
+  [["--compare", "base", "--since", "base"], /cannot combine/],
+  [["--compare", "base", "--use-existing-coverage"], /cannot combine/],
+  [["--refresh"], /requires --compare/],
+])("rejects incompatible comparison flags: %j", (args, message) => {
+  const cwd = comparisonProject();
+  const result = run(cwd, ...args);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(message);
+  expect(existsSync(join(cwd, "calls.log"))).toBe(false);
+});
+
+test("comparison matches renamed files and a unique callback after line numbers move", () => {
+  const cwd = comparisonProject();
+  git(cwd, "mv", "src/orders.ts", "src/purchases.ts");
+  writeFileSync(join(cwd, "src/purchases.ts"), "// Moved\n" + readFileSync(join(cwd, "src/purchases.ts"), "utf8"));
+  writeFileSync(join(cwd, "source-file.txt"), "src/purchases.ts");
+  writeFileSync(join(cwd, "lines.json"), JSON.stringify([[3, 1], [4, 1], [7, 1], [8, 1], [10, 1]]));
+  commit(cwd, "Move functions");
+  const result = runComparison(cwd);
+  expect(result.status, result.stderr).toBe(0);
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  expect(report.entries).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: "price", file: "src/purchases.ts", status: "changed",
+      base: expect.objectContaining({ file: "src/orders.ts" }), delta: { complexity: 0, coverage: 50, crap: -0.5 } }),
+    expect.objectContaining({ name: "stable", status: "renamed", delta: { complexity: 0, coverage: 0, crap: 0 } }),
+  ]));
+  const callbacks = report.entries.filter((entry: { name: string }) => entry.name.startsWith("callbacks.<anonymous@"));
+  expect(callbacks).toHaveLength(1);
+  expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, coverage: 0, crap: 0 } });
+});
+
+test("comparison preserves unknown coverage without inventing a numeric score delta", () => {
+  const cwd = comparisonProject();
+  writeFileSync(join(cwd, "lines.json"), JSON.stringify([[6, 1], [7, 1], [9, 1]]));
+  commit(cwd, "Omit price coverage");
+  const result = runComparison(cwd);
+  expect(result.status, result.stderr).toBe(0);
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  expect(report.entries).toContainEqual(expect.objectContaining({ name: "price", status: "changed",
+    base: expect.objectContaining({ crap: 2.5 }), head: expect.objectContaining({ coverage: null, crap: null }),
+    delta: { complexity: 0, coverage: null, crap: null },
+  }));
+});
+
+test("comparison keeps ambiguous matches explicit without reporting unchanged groups", () => {
+  const before = "export const one = { run() { return 1; } };\nexport const two = { run() { return 2; } };\n";
+  const cwd = comparisonProject({ "src/duplicates.ts": before });
+  const unchanged = runComparison(cwd);
+  expect(unchanged.status, unchanged.stderr).toBe(0);
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries
+    .some((entry: { name: string }) => entry.name === "run")).toBe(false);
+  writeFileSync(join(cwd, "src/duplicates.ts"), before.replace("return 1;", "if (true) return 1; return 0;"));
+  git(cwd, "add", "src/duplicates.ts");
+  git(cwd, "commit", "-qm", "Change one ambiguous function");
+  const changed = runComparison(cwd);
+  expect(changed.status, changed.stderr).toBe(0);
+  const ambiguous = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries
+    .filter((entry: { name: string }) => entry.name === "run");
+  expect(ambiguous).toHaveLength(4);
+  expect(ambiguous.every((entry: { status: string }) => entry.status === "added" || entry.status === "removed")).toBe(true);
+});
+
+test("comparison normalizes roots below the Git root and reuses cache with an absolute source path", () => {
+  const cwd = comparisonProject({}, "packages/app");
+  const first = runComparison(cwd);
+  expect(first.status, first.stderr).toBe(0);
+  const calls = readFileSync(join(cwd, "calls.log"), "utf8");
+  const second = runComparison(cwd, "--source-root", join(cwd, "src"));
+  expect(second.status, second.stderr).toBe(0);
+  expect(readFileSync(join(cwd, "calls.log"), "utf8")).toBe(calls);
+});
+
+test("comparison defaults install each revision's lockfile without running install lifecycle scripts", () => {
+  const cwd = comparisonProject({
+    "package.json": JSON.stringify({ name: "comparison-test", version: "1.0.0", scripts: {
+      postinstall: "node -e 'process.exit(8)'", "test:coverage": "node cover.cjs",
+    } }),
+    "package-lock.json": JSON.stringify({ name: "comparison-test", version: "1.0.0", lockfileVersion: 3,
+      packages: { "": { name: "comparison-test", version: "1.0.0" } } }),
+    "setup.done": "ready",
+  });
+  const result = run(cwd, "--compare", "base");
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("price");
+  expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(2);
+});
+
+test("comparison analyzes one commit once when the merge base is HEAD", () => {
+  const cwd = comparisonProject();
+  const result = runComparison(cwd, "--compare", "HEAD");
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("No matching metric changes.");
+  expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(2);
+  expect(readdirSync(join(cwd, ".metrics/cache"))).toHaveLength(1);
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries).toEqual([]);
+});
 
 test("since reports changed functions with full scores and preserves complete metrics", () => {
   const before = "export function changed(vip: boolean) {\n  if (vip) return 1;\n  return 2;\n}\n\nexport const untouched = () => 4;\n";

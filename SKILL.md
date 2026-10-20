@@ -1,63 +1,36 @@
 ---
 name: crap4ts
-description: Calculate CRAP scores for TypeScript functions using cyclomatic complexity and test coverage. Use for TypeScript CRAP reports, including PR changes, complexity analysis, or identifying functions that need tests before refactoring.
+description: Analyze TypeScript change risk with CRAP scores. Use for project risk reports, changed-function reports, or before-and-after PR comparisons with cached commit reports.
 ---
 
 # CRAP for TypeScript
 
-Use the analyzer bundled with this skill to rank functions by change risk.
+Use the bundled analyzer's full-function scores to explain change risk.
 
 ## Prepare
 
-1. Inspect the target project's test scripts, package manager, source roots, and coverage setup. Use its existing runner. Read [references/coverage.md](references/coverage.md) when configuring LCOV for Vitest, Jest, or c8.
-2. Resolve this skill's directory to an absolute path. A packaged install already has `dist/cli.js`. For a source checkout, use `nvm use` in the skill's directory, install dependencies with `npm ci` if needed, and run `npm run build`. The analyzer requires Node 22 or newer. Keep the target project's runtime requirements when running its tests.
-3. Run the analyzer from the target project's root. Replace `/path/to/crap4ts` below with this skill's directory. If the project uses an older Node version, generate coverage with its runtime first, then use a compatible Node version for `--use-existing-coverage`.
+1. Inspect the target project's source roots, test scripts, package manager, and runtime requirements. Keep its existing test runner. Read [coverage setup](references/coverage.md) when configuring LCOV or investigating source-map problems.
+2. Resolve this skill's directory to an absolute path. Packaged installs include `dist/cli.js`. For a source checkout, use `nvm use` in the skill directory, install dependencies with `npm ci` if needed, and run `npm run build`.
+3. Run from the target project directory. The analyzer needs Node 22 or newer. Keep the project's runtime when generating coverage; with an older project runtime, generate coverage first and use a compatible Node for `--use-existing-coverage`.
 
-## Run
+## Choose the report
+
+- For the effect of a PR on risk, read [commit comparisons](references/comparison.md). `--compare <target-ref>` scores the merge base and committed `HEAD`, reusing matching cached reports. Complete setup, cache, and function-matching rules live in that reference.
+- For current risk in touched functions, use `--since <target-ref>`. It compares the merge base with the working checkout, including staged and unstaged tracked edits. New files enter this diff after being added to Git. Internal deletions select surviving functions; deleted functions and pure renames have no current function to score. Nested edits can select both parent and child.
+- For current project risk, omit both flags. Use the project's actual target reference for PR requests.
 
 ```bash
-# Default coverage command: npm run test:coverage
-node /path/to/crap4ts/dist/cli.js
-
-# Use the project's own coverage command and source roots
-node /path/to/crap4ts/dist/cli.js \
-  --source-root packages/app/src --source-root packages/shared/src \
-  --coverage-command 'pnpm test:coverage' --lcov coverage/lcov.info
-
-# Reuse a report known to match the current sources
-node /path/to/crap4ts/dist/cli.js --use-existing-coverage
-
-# Show only matching file paths in the table
-node /path/to/crap4ts/dist/cli.js --use-existing-coverage orders billing
-
-# Report functions touched by a PR relative to its target branch
+node /path/to/crap4ts/dist/cli.js --compare origin/main
 node /path/to/crap4ts/dist/cli.js --since origin/main
+node /path/to/crap4ts/dist/cli.js --coverage-command 'npm run test:cov -- --runInBand'
 ```
 
-A normal run requires the coverage command to succeed and update the LCOV file. A failed command or unchanged report stops analysis. `--use-existing-coverage` skips both the command and the freshness check.
+Replace `/path/to/crap4ts` with the resolved skill directory. Use `--help` for options, including repeated source roots, LCOV paths, and positional path filters. Normal analysis requires the coverage command to succeed and update LCOV. `--use-existing-coverage` trusts an existing report's freshness.
 
-The default source root is `src`. Roots can be repeated. The analyzer discovers `.ts`, `.tsx`, `.mts`, and `.cts` files, excluding declarations, test files, and common dependency, test, and build directories. It reads source without executing it.
+## Interpret the result
 
-For PR reports, use `--since` with the PR's actual target reference and ensure its history is available locally. The filter compares the merge base with the current checkout, including staged and unstaged tracked edits. New files enter the diff after being added to Git. It selects current function ranges overlapping changed lines, including internal deletions, and retains each function's complete score. Deleted functions and pure renames are omitted. Changes outside function ranges can yield an empty table. See the README's PR reports section for deletion and nested-function conventions.
+Report the largest current scores and score increases with function locations. Explain whether complexity or coverage drives each result. Scores below 5 indicate low measured risk; 5 to below 30 suggest focused tests or simpler control flow; 30 or more deserve priority before changes. These are heuristics.
 
-## Read the results
+`N/A` means coverage is indeterminate. Check coverage inclusion, paths, and source maps before attributing it to missing tests. LCOV measures executable lines; shared lines can share hits, and coverage does not establish useful assertions or full branch coverage. Use the runner's detailed report to investigate suspicious scores. See [measurement conventions](README.md#measurement-conventions) when those details matter.
 
-The table lists function, file and line, cyclomatic complexity, covered executable lines, and CRAP score, worst first. Every successful run replaces `.metrics/crap.json` with all functions under the configured roots. Path filters and `--since` affect only the table. Present the riskiest functions with their locations and explain whether complexity or missing tests drives the score. PR reports show current scores; score differences between revisions require coverage for both revisions.
-
-```text
-CRAP = CC² × (1 - coverage)³ + CC
-```
-
-The formula uses coverage as a fraction. The report displays it as a percentage. Complexity starts at 1 and adds a decision for conditionals, loops, catch clauses, non-default switch cases, short-circuit operators and assignments, optional-chain steps, and parameter or destructuring defaults. Nested functions receive separate scores.
-
-| Score | Interpretation |
-| --- | --- |
-| Below 5 | Low change risk |
-| 5 to below 30 | Consider focused tests or simpler control flow |
-| 30 or above | Prioritize before changing the function |
-
-`N/A` means the report has no matching executable lines for that function. Check LCOV paths, coverage inclusion, and source maps before drawing conclusions. An omitted file is unknown, not proven untested. Missing coverage does not produce a numeric CRAP score.
-
-LCOV supplies line coverage, not branch coverage or proof of assertions. Functions sharing a line can share hits. Multiline nested bodies are excluded from the parent's coverage; shared lines may be indeterminate. Use the runner's detailed report to investigate suspicious results. See [README.md](README.md) for the exact conventions and limitations.
-
-A report request authorizes analysis. Propose focused tests or refactoring for the worst scores; perform those changes when requested.
+Normal runs save all analyzed functions in `.metrics/crap.json`. `--since` and path filters affect the displayed table. A report request authorizes analysis; propose tests or refactoring and perform those changes when requested.

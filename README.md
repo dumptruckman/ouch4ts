@@ -63,13 +63,13 @@ Function  File               CC   Cov%  CRAP
 price     src/orders.ts:1      2  50.0%   2.5
 ```
 
-Every successful run replaces `.metrics/crap.json` with `{ "entries": [...] }`. Entries contain `name`, `file`, `line`, `endLine`, `complexity`, `coverage`, and `crap`. Line numbers are 1-based. Coverage is a percentage; unknown coverage and CRAP are JSON `null` and display as `N/A`.
+Normal analysis replaces `.metrics/crap.json` with `{ "entries": [...] }`. Entries contain `name`, `file`, `line`, `endLine`, `complexity`, `coverage`, and `crap`. Line numbers are 1-based. Coverage is a percentage; unknown coverage and CRAP are JSON `null` and display as `N/A`.
 
 Entries sort by descending score, then file and line. Unknown scores come last. Path fragments filter the table, using OR matching, while the metrics file always contains all functions under the configured roots. Commit `.metrics/` in a measured project if you want to track results over time.
 
 Scores below 5 indicate low change risk. Scores from 5 to below 30 suggest focused tests or simpler control flow. Prioritize scores of 30 or more before changing those functions. These are heuristics, not a quality gate.
 
-## PR reports
+## Changed-function reports
 
 Use `--since` with the PR's target branch or another Git reference:
 
@@ -84,7 +84,20 @@ Scores still measure each complete function using current coverage. A nested cha
 
 The diff includes committed changes plus staged and unstaged tracked edits. Add new files to Git before analyzing them in this mode. Run from the project directory as usual, including projects below the Git root. Git and the target reference's history must be available locally; fetch the target branch and enough history when using a shallow checkout. Invalid references or missing merge bases fail before coverage runs.
 
-This reports current scores for changed functions. Comparing scores between revisions would require coverage from both revisions.
+This reports current scores for changed functions. Use comparison mode to measure the PR's effect on scores.
+
+## Commit comparisons
+
+```bash
+node /absolute/path/to/crap4ts/dist/cli.js --compare origin/main
+node /absolute/path/to/crap4ts/dist/cli.js --compare origin/main --refresh
+```
+
+Comparison mode scores the merge base and committed `HEAD` in temporary detached worktrees. On a cache miss it runs `npm ci --ignore-scripts`, then the configured coverage command, using each revision's dependencies and source. Customize preparation with `--setup-command`. Local source edits are preserved and excluded from this mode.
+
+The report shows base and head complexity, coverage, CRAP, score delta, and added or removed functions. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. `--refresh` regenerates them. Exclude the cache directory from version control when tracking `.metrics/`.
+
+The result is saved to `.metrics/crap-comparison.json`; the ordinary `.metrics/crap.json` is preserved. Path filters narrow the table, while the saved comparison retains all changed metrics. See [comparison setup, cache rules, and matching conventions](references/comparison.md).
 
 ## Measurement conventions
 

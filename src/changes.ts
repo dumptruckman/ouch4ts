@@ -1,6 +1,6 @@
-import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import type { analyze } from "./index.js";
+import { git } from "./git.js";
 
 /** Read the Git diff once, then match current-source function ranges against changed lines. */
 export function changedFunctionFilter(reference: string) {
@@ -41,11 +41,4 @@ function decodeGitPath(path: string) {
   };
   return path.slice(1, -1).replace(/\\([0-7]{1,3}|[abfnrtv"\\])/g,
     (_, token: string) => escapes[token] ?? String.fromCharCode(Number.parseInt(token, 8)));
-}
-
-function git(args: string[]) {
-  const result = spawnSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`git ${args[0]} failed: ${result.stderr.trim()}`);
-  return result.stdout;
 }
