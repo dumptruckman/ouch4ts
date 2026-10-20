@@ -3,7 +3,9 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeAll, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test, vi } from "vitest";
+
+import { runCli } from "../src/command.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const cli = join(root, "dist/cli.js");
@@ -13,25 +15,40 @@ beforeAll(() => {
   execFileSync(process.execPath, [fileURLToPath(import.meta.resolve("typescript/bin/tsc")), "-p", "tsconfig.build.json"], { cwd: root });
 });
 
-test("help works without source files or a coverage setup", () => {
+test("help works without source files or a coverage setup", async () => {
   const cwd = project({});
-  const result = run(cwd, "--help");
+  const result = runBinary(cwd, "--help");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("--use-existing-coverage");
+  expect((await run(cwd, "--help")).stdout).toBe(result.stdout.trimEnd());
   expect(existsSync(join(cwd, ".metrics"))).toBe(false);
+});
+
+test.each([
+  { args: ["--use-existing-coverage"], status: 0, stdout: /price\s+src\/orders.ts:1\s+1\s+100.0%\s+1.0/, stderr: /^$/ },
+  { args: ["--unknown"], status: 1, stdout: /^$/, stderr: /crap4ts:.*Unknown option/ },
+])("executable reports results and exit codes for $args", ({ args, status, stdout, stderr }) => {
+  const cwd = project({
+    "src/orders.ts": "export const price = () => 10;",
+    "coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
+  });
+  const result = runBinary(cwd, ...args);
+  expect(result.status, result.stderr).toBe(status);
+  expect(result.stdout).toMatch(stdout);
+  expect(result.stderr).toMatch(stderr);
 });
 
 test.each([
   [["--unknown"], /Unknown option/],
   [["--lcov"], /argument missing/],
   [["--use-existing-coverage"], /ENOENT.*src/],
-])("reports a setup error for %j", (args, message) => {
-  const result = run(project({}), ...args);
+])("reports a setup error for %j", async (args, message) => {
+  const result = await run(project({}), ...args);
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(message);
 });
 
-test("supports custom roots and coverage, filters the table, and rebuilds all metrics", () => {
+test("supports custom roots and coverage, filters the table, and rebuilds all metrics", async () => {
   const cwd = project({
     "lib/orders.mts": "export const price = () => 10;",
     "services/worker.cts": "export const work = () => 20;",
@@ -44,7 +61,7 @@ test("supports custom roots and coverage, filters the table, and rebuilds all me
     "cover.cjs": `const fs = require('node:fs'); fs.mkdirSync('reports'); fs.writeFileSync('reports/unit.lcov', 'SF:lib/orders.mts\\nDA:1,1\\nend_of_record\\n');`,
     ".metrics/crap.json": JSON.stringify({ entries: [{ name: "obsolete" }] }),
   });
-  const result = run(cwd, "--source-root", "lib", "--source-root", "services", "--source-root", "lib",
+  const result = await run(cwd, "--source-root", "lib", "--source-root", "services", "--source-root", "lib",
     "--lcov", "reports/unit.lcov", "--coverage-command", "node cover.cjs", "orders");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("price");
@@ -58,27 +75,27 @@ test("supports custom roots and coverage, filters the table, and rebuilds all me
 test.each([
   ["process.exit(7)", /Coverage command failed/],
   ["console.log('no coverage generated')", /did not update/],
-])("refuses to score stale coverage after %s", (command, message) => {
+])("refuses to score stale coverage after %s", async (command, message) => {
   const cwd = project({
     "src/orders.ts": "export function price() { return 10; }",
     "coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
     "package.json": JSON.stringify({ scripts: { "test:coverage": "node cover.cjs" } }),
     "cover.cjs": command,
   });
-  const result = run(cwd);
+  const result = await run(cwd);
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(message);
   expect(existsSync(join(cwd, ".metrics/crap.json"))).toBe(false);
 });
 
-test("runs the project's coverage script and replaces stale scores with fresh coverage", () => {
+test("runs the project's coverage script and replaces stale scores with fresh coverage", async () => {
   const cwd = project({
     "src/orders.ts": "export function price() { return 10; }",
     "coverage/lcov.info": "SF:src/orders.ts\nDA:1,0\nend_of_record\n",
     "package.json": JSON.stringify({ scripts: { "test:coverage": "node cover.cjs" } }),
     "cover.cjs": `require('node:fs').writeFileSync('coverage/lcov.info', 'SF:src/orders.ts\\nDA:1,1\\nend_of_record\\n');`,
   });
-  const result = run(cwd);
+  const result = await run(cwd);
   expect(result.status, result.stderr).toBe(0);
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toMatchObject({
     entries: [{ name: "price", coverage: 100, crap: 1 }],
@@ -99,8 +116,26 @@ function project(files: Record<string, string>) {
   return path;
 }
 
-function run(cwd: string, ...args: string[]) {
+function runBinary(cwd: string, ...args: string[]) {
   return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8" });
+}
+
+async function run(cwd: string, ...args: string[]) {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const output = vi.spyOn(console, "log").mockImplementation(message => { stdout.push(String(message)); });
+  const errors = vi.spyOn(console, "error").mockImplementation(message => { stderr.push(String(message)); });
+  let status = 0;
+  try {
+    await runCli(args, cwd);
+  } catch (error) {
+    status = 1;
+    stderr.push(error instanceof Error ? error.message : String(error));
+  } finally {
+    output.mockRestore();
+    errors.mockRestore();
+  }
+  return { status, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
 }
 
 function git(cwd: string, ...args: string[]) {
@@ -149,7 +184,7 @@ function runComparison(cwd: string, ...args: string[]) {
   return run(cwd, "--compare", "base", "--setup-command", "node setup.cjs", "--coverage-command", "node cover.cjs", ...args);
 }
 
-test("compare scores committed base and head in isolated checkouts and reports metric changes", () => {
+test("compare scores committed base and head in isolated checkouts and reports metric changes", async () => {
   const cwd = comparisonProject();
   const head = git(cwd, "rev-parse", "HEAD").trim();
   const base = git(cwd, "rev-parse", "base").trim();
@@ -159,7 +194,7 @@ test("compare scores committed base and head in isolated checkouts and reports m
   git(cwd, "checkout", "-q", "main");
   const localEdit = "export function uncommitted( {";
   writeFileSync(join(cwd, "src/orders.ts"), localEdit);
-  const result = runComparison(cwd, "--compare", "target");
+  const result = await runComparison(cwd, "--compare", "target");
   expect(result.status, result.stderr).toBe(0);
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
   expect(report).toMatchObject({ base, head, entries: expect.arrayContaining([
@@ -186,13 +221,13 @@ test("compare scores committed base and head in isolated checkouts and reports m
   expect(readFileSync(join(cwd, "src/orders.ts"), "utf8")).toBe(localEdit);
 });
 
-test("compare reuses commit reports until refresh is requested", () => {
+test("compare reuses commit reports until refresh is requested", async () => {
   const cwd = comparisonProject();
-  const first = runComparison(cwd);
+  const first = await runComparison(cwd);
   expect(first.status, first.stderr).toBe(0);
   const report = readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8");
   const calls = readFileSync(join(cwd, "calls.log"), "utf8");
-  const second = runComparison(cwd, "missing-file");
+  const second = await runComparison(cwd, "missing-file");
   expect(second.status, second.stderr).toBe(0);
   expect(second.stdout).not.toContain("price");
   expect(readFileSync(join(cwd, "calls.log"), "utf8")).toBe(calls);
@@ -202,37 +237,37 @@ test("compare reuses commit reports until refresh is requested", () => {
   expect(cache.some(name => name.includes(git(cwd, "rev-parse", "base").trim()))).toBe(true);
   expect(cache.some(name => name.includes(git(cwd, "rev-parse", "HEAD").trim()))).toBe(true);
 
-  const refreshed = runComparison(cwd, "--refresh");
+  const refreshed = await runComparison(cwd, "--refresh");
   expect(refreshed.status, refreshed.stderr).toBe(0);
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
 });
 
-test("comparison cache separates coverage settings and regenerates a damaged commit report", () => {
+test("comparison cache separates coverage settings and regenerates a damaged commit report", async () => {
   const cwd = comparisonProject();
-  expect(runComparison(cwd).status).toBe(0);
+  expect((await runComparison(cwd)).status).toBe(0);
   const cacheDir = join(cwd, ".metrics/cache");
   const original = readdirSync(cacheDir);
-  const changed = runComparison(cwd, "--coverage-command", "node ./cover.cjs");
+  const changed = await runComparison(cwd, "--coverage-command", "node ./cover.cjs");
   expect(changed.status, changed.stderr).toBe(0);
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
   const head = git(cwd, "rev-parse", "HEAD").trim();
   const damaged = readdirSync(cacheDir).find(name => !original.includes(name) && name.includes(head));
   expect(damaged).toBeDefined();
   writeFileSync(join(cacheDir, damaged!), '{"entries":"invalid"}');
-  const repaired = runComparison(cwd, "--coverage-command", "node ./cover.cjs");
+  const repaired = await runComparison(cwd, "--coverage-command", "node ./cover.cjs");
   expect(repaired.status, repaired.stderr).toBe(0);
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(10);
   expect(JSON.parse(readFileSync(join(cacheDir, damaged!), "utf8")).entries).toHaveLength(5);
 });
 
-test("failed comparison coverage preserves the previous report and cleans up its checkout", () => {
+test("failed comparison coverage preserves the previous report and cleans up its checkout", async () => {
   const cwd = comparisonProject();
-  expect(runComparison(cwd).status).toBe(0);
+  expect((await runComparison(cwd)).status).toBe(0);
   const original = readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8");
   writeFileSync(join(cwd, "cover.cjs"), "process.exit(9);");
   git(cwd, "add", "cover.cjs");
   git(cwd, "commit", "-qm", "Break coverage");
-  const failed = runComparison(cwd);
+  const failed = await runComparison(cwd);
   expect(failed.status).toBe(1);
   expect(failed.stderr).toContain("Coverage command failed: 9");
   expect(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).toBe(original);
@@ -244,22 +279,22 @@ test.each([
   [["--compare", "base", "--since", "base"], /cannot combine/],
   [["--compare", "base", "--use-existing-coverage"], /cannot combine/],
   [["--refresh"], /requires --compare/],
-])("rejects incompatible comparison flags: %j", (args, message) => {
+])("rejects incompatible comparison flags: %j", async (args, message) => {
   const cwd = comparisonProject();
-  const result = run(cwd, ...args);
+  const result = await run(cwd, ...args);
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(message);
   expect(existsSync(join(cwd, "calls.log"))).toBe(false);
 });
 
-test("comparison matches renamed files and a unique callback after line numbers move", () => {
+test("comparison matches renamed files and a unique callback after line numbers move", async () => {
   const cwd = comparisonProject();
   git(cwd, "mv", "src/orders.ts", "src/purchases.ts");
   writeFileSync(join(cwd, "src/purchases.ts"), "// Moved\n" + readFileSync(join(cwd, "src/purchases.ts"), "utf8"));
   writeFileSync(join(cwd, "source-file.txt"), "src/purchases.ts");
   writeFileSync(join(cwd, "lines.json"), JSON.stringify([[3, 1], [4, 1], [7, 1], [8, 1], [10, 1]]));
   commit(cwd, "Move functions");
-  const result = runComparison(cwd);
+  const result = await runComparison(cwd);
   expect(result.status, result.stderr).toBe(0);
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
   expect(report.entries).toEqual(expect.arrayContaining([
@@ -272,11 +307,11 @@ test("comparison matches renamed files and a unique callback after line numbers 
   expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, coverage: 0, crap: 0 } });
 });
 
-test("comparison preserves unknown coverage without inventing a numeric score delta", () => {
+test("comparison preserves unknown coverage without inventing a numeric score delta", async () => {
   const cwd = comparisonProject();
   writeFileSync(join(cwd, "lines.json"), JSON.stringify([[6, 1], [7, 1], [9, 1]]));
   commit(cwd, "Omit price coverage");
-  const result = runComparison(cwd);
+  const result = await runComparison(cwd);
   expect(result.status, result.stderr).toBe(0);
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
   expect(report.entries).toContainEqual(expect.objectContaining({ name: "price", status: "changed",
@@ -285,17 +320,17 @@ test("comparison preserves unknown coverage without inventing a numeric score de
   }));
 });
 
-test("comparison keeps ambiguous matches explicit without reporting unchanged groups", () => {
+test("comparison keeps ambiguous matches explicit without reporting unchanged groups", async () => {
   const before = "export const one = { run() { return 1; } };\nexport const two = { run() { return 2; } };\n";
   const cwd = comparisonProject({ "src/duplicates.ts": before });
-  const unchanged = runComparison(cwd);
+  const unchanged = await runComparison(cwd);
   expect(unchanged.status, unchanged.stderr).toBe(0);
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries
     .some((entry: { name: string }) => entry.name === "run")).toBe(false);
   writeFileSync(join(cwd, "src/duplicates.ts"), before.replace("return 1;", "if (true) return 1; return 0;"));
   git(cwd, "add", "src/duplicates.ts");
   git(cwd, "commit", "-qm", "Change one ambiguous function");
-  const changed = runComparison(cwd);
+  const changed = await runComparison(cwd);
   expect(changed.status, changed.stderr).toBe(0);
   const ambiguous = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries
     .filter((entry: { name: string }) => entry.name === "run");
@@ -303,17 +338,17 @@ test("comparison keeps ambiguous matches explicit without reporting unchanged gr
   expect(ambiguous.every((entry: { status: string }) => entry.status === "added" || entry.status === "removed")).toBe(true);
 });
 
-test("comparison normalizes roots below the Git root and reuses cache with an absolute source path", () => {
+test("comparison normalizes roots below the Git root and reuses cache with an absolute source path", async () => {
   const cwd = comparisonProject({}, "packages/app");
-  const first = runComparison(cwd);
+  const first = await runComparison(cwd);
   expect(first.status, first.stderr).toBe(0);
   const calls = readFileSync(join(cwd, "calls.log"), "utf8");
-  const second = runComparison(cwd, "--source-root", join(cwd, "src"));
+  const second = await runComparison(cwd, "--source-root", join(cwd, "src"));
   expect(second.status, second.stderr).toBe(0);
   expect(readFileSync(join(cwd, "calls.log"), "utf8")).toBe(calls);
 });
 
-test("comparison defaults install each revision's lockfile without running install lifecycle scripts", () => {
+test("comparison defaults install each revision's lockfile without running install lifecycle scripts", async () => {
   const cwd = comparisonProject({
     "package.json": JSON.stringify({ name: "comparison-test", version: "1.0.0", scripts: {
       postinstall: "node -e 'process.exit(8)'", "test:coverage": "node cover.cjs",
@@ -322,15 +357,15 @@ test("comparison defaults install each revision's lockfile without running insta
       packages: { "": { name: "comparison-test", version: "1.0.0" } } }),
     "setup.done": "ready",
   });
-  const result = run(cwd, "--compare", "base");
+  const result = await run(cwd, "--compare", "base");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("price");
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(2);
 });
 
-test("comparison analyzes one commit once when the merge base is HEAD", () => {
+test("comparison analyzes one commit once when the merge base is HEAD", async () => {
   const cwd = comparisonProject();
-  const result = runComparison(cwd, "--compare", "HEAD");
+  const result = await runComparison(cwd, "--compare", "HEAD");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("No matching metric changes.");
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(2);
@@ -338,7 +373,7 @@ test("comparison analyzes one commit once when the merge base is HEAD", () => {
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries).toEqual([]);
 });
 
-test("since reports changed functions with full scores and preserves complete metrics", () => {
+test("since reports changed functions with full scores and preserves complete metrics", async () => {
   const before = "export function changed(vip: boolean) {\n  if (vip) return 1;\n  return 2;\n}\n\nexport const untouched = () => 4;\n";
   const cwd = project({
     "src/orders.ts": before,
@@ -350,7 +385,7 @@ test("since reports changed functions with full scores and preserves complete me
   writeFileSync(join(cwd, "src/orders.ts"), before.replace("return 2", "return 3"));
   commit(cwd, "Change price");
 
-  const result = run(cwd, "--since", "base", "--use-existing-coverage");
+  const result = await run(cwd, "--since", "base", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toMatch(/changed\s+src\/orders.ts:1\s+2\s+50.0%\s+2.5/);
   expect(result.stdout).not.toContain("untouched");
@@ -359,7 +394,7 @@ test("since reports changed functions with full scores and preserves complete me
   ] });
 });
 
-test("since includes deletions inside a function without blaming a neighbor for a removed function", () => {
+test("since includes deletions inside a function without blaming a neighbor for a removed function", async () => {
   const before = "export function untouched() {\n  return 0;\n}\nexport function removed() {\n  return 1;\n}\nexport function changed() {\n  const unused = 1;\n  return 2;\n}\n";
   const cwd = project({
     "src/orders.ts": before,
@@ -371,14 +406,14 @@ test("since includes deletions inside a function without blaming a neighbor for 
     .replace("export function removed() {\n  return 1;\n}\n", "")
     .replace("  const unused = 1;\n", ""));
 
-  const result = run(cwd, "--since", "HEAD", "--use-existing-coverage");
+  const result = await run(cwd, "--since", "HEAD", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toMatch(/changed\s+src\/orders.ts:4/);
   expect(result.stdout).not.toContain("untouched");
   expect(result.stdout).not.toContain("removed");
 });
 
-test("since uses the merge base of diverged branches and composes with path filters", () => {
+test("since uses the merge base of diverged branches and composes with path filters", async () => {
   const cwd = project({
     "src/feature.ts": "export const feature = () => 1;\n",
     "src/target.ts": "export const target = () => 1;\n",
@@ -397,19 +432,19 @@ test("since uses the merge base of diverged branches and composes with path filt
   commit(cwd, "Target changes");
   git(cwd, "checkout", "-q", "feature");
 
-  const result = run(cwd, "--since", "main", "--use-existing-coverage");
+  const result = await run(cwd, "--since", "main", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("src/feature.ts");
   expect(result.stdout).toContain("src/other.ts");
   expect(result.stdout).not.toContain("src/target.ts");
 
-  const filtered = run(cwd, "--since", "main", "--use-existing-coverage", "feature");
+  const filtered = await run(cwd, "--since", "main", "--use-existing-coverage", "feature");
   expect(filtered.status, filtered.stderr).toBe(0);
   expect(filtered.stdout).toContain("src/feature.ts");
   expect(filtered.stdout).not.toContain("src/other.ts");
 });
 
-test("since follows edited renames and quoted paths from a project below the Git root", () => {
+test("since follows edited renames and quoted paths from a project below the Git root", async () => {
   const before = "export function changed() {\n  const value = 1;\n  return 2;\n}\n\nexport function untouched() {\n  return 4;\n}\n";
   const filename = 'order "special" Ω.ts';
   const cwd = project({
@@ -426,7 +461,7 @@ test("since follows edited renames and quoted paths from a project below the Git
   writeFileSync(join(cwd, "packages/app/src", filename), before.replace("return 2", "return 3"));
   commit(cwd, "Move and edit");
 
-  const result = run(join(cwd, "packages/app"), "--since", "base", "--use-existing-coverage");
+  const result = await run(join(cwd, "packages/app"), "--since", "base", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("changed");
   expect(result.stdout).toContain(filename);
@@ -434,7 +469,7 @@ test("since follows edited renames and quoted paths from a project below the Git
   expect(result.stdout).not.toContain("moved");
 });
 
-test("since includes functions in added files and skips changes outside function ranges", () => {
+test("since includes functions in added files and skips changes outside function ranges", async () => {
   const cwd = project({
     "src/orders.ts": "// Original comment\nexport const untouched = () => 1;\n",
     "coverage/lcov.info": "SF:src/orders.ts\nDA:2,1\nend_of_record\n" +
@@ -446,13 +481,13 @@ test("since includes functions in added files and skips changes outside function
   writeFileSync(join(cwd, "src/new.ts"), "export const added = () => 2;\n");
   git(cwd, "add", "src/new.ts");
 
-  const result = run(cwd, "--since", "HEAD", "--use-existing-coverage");
+  const result = await run(cwd, "--since", "HEAD", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("added");
   expect(result.stdout).not.toContain("untouched");
 });
 
-test("since gives an empty table for an unchanged checkout without losing its metrics", () => {
+test("since gives an empty table for an unchanged checkout without losing its metrics", async () => {
   const cwd = project({
     "src/orders.ts": "export const untouched = () => 1;\n",
     "coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
@@ -460,7 +495,7 @@ test("since gives an empty table for an unchanged checkout without losing its me
   git(cwd, "init", "-q", "--initial-branch=main");
   commit(cwd, "Base");
 
-  const result = run(cwd, "--since", "HEAD", "--use-existing-coverage");
+  const result = await run(cwd, "--since", "HEAD", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).not.toContain("untouched");
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toMatchObject({
@@ -468,19 +503,19 @@ test("since gives an empty table for an unchanged checkout without losing its me
   });
 });
 
-test("since fails before running coverage or writing metrics when its Git reference is invalid", () => {
+test("since fails before running coverage or writing metrics when its Git reference is invalid", async () => {
   const cwd = project({ "src/orders.ts": "export const price = () => 1;\n" });
   git(cwd, "init", "-q", "--initial-branch=main");
   commit(cwd, "Base");
 
-  const result = run(cwd, "--since", "missing-reference", "--coverage-command", "node -e \"process.exit(42)\"");
+  const result = await run(cwd, "--since", "missing-reference", "--coverage-command", "node -e \"process.exit(42)\"");
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/git rev-parse failed/);
   expect(result.stderr).not.toContain("Coverage command failed");
   expect(existsSync(join(cwd, ".metrics"))).toBe(false);
 });
 
-test("since excludes unchanged functions between hunks even when Git is configured to merge context", () => {
+test("since excludes unchanged functions between hunks even when Git is configured to merge context", async () => {
   const before = "export const first = () => 1;\nexport const middle = () => 1;\nexport const last = () => 1;\n";
   const cwd = project({
     "src/orders.ts": before,
@@ -492,19 +527,19 @@ test("since excludes unchanged functions between hunks even when Git is configur
   writeFileSync(join(cwd, "src/orders.ts"), before.replace("first = () => 1", "first = () => 2")
     .replace("last = () => 1", "last = () => 2"));
 
-  const result = run(cwd, "--since", "HEAD", "--use-existing-coverage");
+  const result = await run(cwd, "--since", "HEAD", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("first");
   expect(result.stdout).toContain("last");
   expect(result.stdout).not.toContain("middle");
 });
 
-test("prints function risk and saves a machine-readable metrics report", () => {
+test("prints function risk and saves a machine-readable metrics report", async () => {
   const cwd = project({
     "src/orders.ts": "export function price(vip: boolean) {\n  if (vip) return 10;\n  return 20;\n}\n",
     "coverage/lcov.info": "SF:src/orders.ts\nDA:2,1\nDA:3,0\nend_of_record\n",
   });
-  const result = run(cwd, "--use-existing-coverage");
+  const result = await run(cwd, "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toMatch(/price\s+src\/orders.ts:1\s+2\s+50.0%\s+2.5/);
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toEqual({ entries: [{

@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { readdir, readFile, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { analyze } from "./index.js";
+import { discoverSources, reportStamp } from "./files.js";
 
 export interface ProjectOptions {
   cwd: string;
@@ -13,7 +14,7 @@ export interface ProjectOptions {
 
 export async function analyzeProject(options: ProjectOptions) {
   const { cwd, sourceRoots, lcov, coverageCommand, useExistingCoverage } = options;
-  const paths = [...new Set((await Promise.all(sourceRoots.map(root => discover(resolve(cwd, root))))).flat())];
+  const paths = [...new Set((await Promise.all(sourceRoots.map(root => discoverSources(resolve(cwd, root))))).flat())];
   if (paths.length === 0) throw new Error(`No TypeScript sources found under ${sourceRoots.join(", ")}`);
   const reportPath = resolve(cwd, lcov);
   if (!useExistingCoverage) {
@@ -31,26 +32,3 @@ export function runCommand(command: string, cwd: string, label: string) {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${label} command failed: ${result.signal ?? result.status}`);
 }
-
-async function reportStamp(path: string) {
-  try {
-    const info = await stat(path, { bigint: true });
-    return `${info.ino}:${info.mtimeNs}:${info.ctimeNs}:${info.size}`;
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
-async function discover(root: string): Promise<string[]> {
-  const paths: string[] = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory() && !excludedDirectories.has(entry.name)) paths.push(...await discover(path));
-    else if (entry.isFile() && /\.(?:ts|tsx|mts|cts)$/.test(entry.name) &&
-      !/\.d\.[cm]?ts$|\.(?:test|spec)\.[cm]?tsx?$/.test(entry.name)) paths.push(path);
-  }
-  return paths;
-}
-
-const excludedDirectories = new Set(["node_modules", ".git", "dist", "build", "coverage", "test", "tests", "__tests__", "__mocks__"]);

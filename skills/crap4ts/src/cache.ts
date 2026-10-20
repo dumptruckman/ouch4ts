@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { analyzeProject } from "./project.js";
+import { isMissingFile } from "./files.js";
 
 type Metric = Awaited<ReturnType<typeof analyzeProject>>[number];
 
@@ -10,13 +11,15 @@ export async function readCache(path: string, commit: string, settingsKey: strin
   try {
     data = JSON.parse(await readFile(path, "utf8"));
   } catch (error) {
-    if (error instanceof SyntaxError ||
-      (error instanceof Error && "code" in error && error.code === "ENOENT")) return null;
+    if (error instanceof SyntaxError || isMissingFile(error)) return null;
     throw error;
   }
-  if (typeof data !== "object" || data === null || !("commit" in data) || data.commit !== commit ||
-    !("settingsKey" in data) || data.settingsKey !== settingsKey || !("entries" in data) ||
-    !Array.isArray(data.entries) || !data.entries.every(isMetric)) return null;
+  return cachedEntries(data, commit, settingsKey);
+}
+
+function cachedEntries(data: unknown, commit: string, settingsKey: string) {
+  if (!isRecord(data) || data.commit !== commit || data.settingsKey !== settingsKey) return null;
+  if (!Array.isArray(data.entries) || !data.entries.every(isMetric)) return null;
   return data.entries;
 }
 
@@ -32,13 +35,33 @@ export async function writeCache(path: string, commit: string, settingsKey: stri
 }
 
 function isMetric(value: unknown): value is Metric {
-  if (typeof value !== "object" || value === null) return false;
-  return "name" in value && typeof value.name === "string" && "file" in value && typeof value.file === "string" &&
-    "line" in value && isNumber(value.line) && Number.isInteger(value.line) && value.line >= 1 &&
-    "endLine" in value && isNumber(value.endLine) && Number.isInteger(value.endLine) && value.endLine >= value.line &&
-    "complexity" in value && isNumber(value.complexity) && Number.isInteger(value.complexity) && value.complexity >= 1 &&
-    "coverage" in value && "crap" in value && (value.coverage === null ? value.crap === null :
-      isNumber(value.coverage) && value.coverage >= 0 && value.coverage <= 100 && isNumber(value.crap) && value.crap >= 1);
+  return isRecord(value) && hasFunctionIdentity(value) && hasFunctionRange(value) &&
+    isPositiveInteger(value.complexity) && hasRiskScores(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function hasFunctionIdentity(value: Record<string, unknown>) {
+  return typeof value.name === "string" && typeof value.file === "string";
+}
+
+function hasFunctionRange(value: Record<string, unknown>) {
+  return isPositiveInteger(value.line) && isPositiveInteger(value.endLine) && value.endLine >= value.line;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return isNumber(value) && Number.isInteger(value) && value >= 1;
+}
+
+function hasRiskScores(value: Record<string, unknown>) {
+  if (value.coverage === null) return value.crap === null;
+  return isCoverage(value.coverage) && isNumber(value.crap) && value.crap >= 1;
+}
+
+function isCoverage(value: unknown) {
+  return isNumber(value) && value >= 0 && value <= 100;
 }
 
 function isNumber(value: unknown): value is number {

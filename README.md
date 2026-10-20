@@ -139,4 +139,4 @@ npm run test:coverage
 npm run crap -- --use-existing-coverage
 ```
 
-CLI tests build and execute the real binary against temporary projects. The test coverage report instruments the analyzer in the test process; CLI subprocesses do not contribute to it.
+CLI tests exercise the command handler against temporary projects so coverage includes reporting, Git comparisons, and caching. A binary check verifies the executable entry point. Subprocesses that run setup and coverage commands do not contribute to the analyzer's coverage report.

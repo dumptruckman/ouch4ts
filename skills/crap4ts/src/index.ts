@@ -42,24 +42,36 @@ type RuntimeFunction = (
 ) & { body: ts.ConciseBody };
 
 function isRuntimeFunction(node: ts.Node): node is RuntimeFunction {
-  return (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node) ||
-    ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node) ||
-    ts.isConstructorDeclaration(node)) && node.body !== undefined;
+  return runtimeFunctionKinds.has(node.kind) && "body" in node && node.body !== undefined;
+}
+
+const runtimeFunctionKinds = new Set([
+  ts.SyntaxKind.FunctionDeclaration, ts.SyntaxKind.FunctionExpression, ts.SyntaxKind.ArrowFunction,
+  ts.SyntaxKind.MethodDeclaration, ts.SyntaxKind.GetAccessor, ts.SyntaxKind.SetAccessor,
+  ts.SyntaxKind.Constructor,
+]);
+
+function accessorPrefix(node: RuntimeFunction) {
+  if (ts.isGetAccessorDeclaration(node)) return "get ";
+  if (ts.isSetAccessorDeclaration(node)) return "set ";
+  return "";
 }
 
 function functionName(node: RuntimeFunction, source: ts.SourceFile) {
   if (ts.isConstructorDeclaration(node)) return "constructor";
-  if (node.name) {
-    const prefix = ts.isGetAccessorDeclaration(node) ? "get " : ts.isSetAccessorDeclaration(node) ? "set " : "";
-    return prefix + node.name.getText(source);
-  }
+  if (node.name) return accessorPrefix(node) + node.name.getText(source);
+  const assigned = assignedFunctionName(node, source);
+  if (assigned !== undefined) return assigned;
+  if (ts.isFunctionDeclaration(node)) return "default";
+  const { line, character } = source.getLineAndCharacterOfPosition(node.getStart(source));
+  return `<anonymous@${line + 1}:${character + 1}>`;
+}
+
+function assignedFunctionName(node: RuntimeFunction, source: ts.SourceFile) {
   const parent = node.parent;
   if (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) {
     return parent.name.getText(source);
   }
-  if (ts.isFunctionDeclaration(node)) return "default";
-  const { line, character } = source.getLineAndCharacterOfPosition(node.getStart(source));
-  return `<anonymous@${line + 1}:${character + 1}>`;
 }
 
 function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<number, number> | undefined,
@@ -75,15 +87,7 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
       if (nested) nestedRanges.push(nested);
       return;
     }
-    if (ts.isIfStatement(child) || ts.isConditionalExpression(child) || ts.isForStatement(child) ||
-      ts.isForInStatement(child) || ts.isForOfStatement(child) || ts.isWhileStatement(child) ||
-      ts.isDoStatement(child) || ts.isCatchClause(child) || ts.isCaseClause(child) ||
-      ((ts.isParameter(child) || ts.isBindingElement(child)) && child.initializer !== undefined) ||
-      ((ts.isPropertyAccessExpression(child) || ts.isElementAccessExpression(child) || ts.isCallExpression(child)) &&
-        child.questionDotToken !== undefined) ||
-      (ts.isBinaryExpression(child) && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken,
-        ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.AmpersandAmpersandEqualsToken,
-        ts.SyntaxKind.QuestionQuestionEqualsToken].includes(child.operatorToken.kind))) complexity++;
+    if (isDecision(child)) complexity++;
     ts.forEachChild(child, count);
   }
   ts.forEachChild(node, count);
@@ -96,6 +100,32 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
     coverage: fraction === null ? null : fraction * 100,
     crap: fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity,
   };
+}
+
+const decisionKinds = new Set([
+  ts.SyntaxKind.IfStatement, ts.SyntaxKind.ConditionalExpression, ts.SyntaxKind.ForStatement,
+  ts.SyntaxKind.ForInStatement, ts.SyntaxKind.ForOfStatement, ts.SyntaxKind.WhileStatement,
+  ts.SyntaxKind.DoStatement, ts.SyntaxKind.CatchClause, ts.SyntaxKind.CaseClause,
+]);
+
+const shortCircuitOperators = new Set([
+  ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.QuestionQuestionToken,
+  ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+]);
+
+function isDecision(node: ts.Node) {
+  return decisionKinds.has(node.kind) || hasDefaultValue(node) || isOptionalChainStep(node) ||
+    (ts.isBinaryExpression(node) && shortCircuitOperators.has(node.operatorToken.kind));
+}
+
+function hasDefaultValue(node: ts.Node) {
+  return (ts.isParameter(node) || ts.isBindingElement(node)) && node.initializer !== undefined;
+}
+
+function isOptionalChainStep(node: ts.Node) {
+  return (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) || ts.isCallExpression(node)) &&
+    node.questionDotToken !== undefined;
 }
 
 function bodyRange(node: RuntimeFunction, source: ts.SourceFile) {
@@ -111,22 +141,39 @@ function readLcov(text: string, root: string) {
   let lines: Map<number, number> | undefined;
   for (const record of text.split(/\r?\n/)) {
     if (record.startsWith("SF:")) {
-      if (lines || record.length === 3) throw new Error("Invalid LCOV source record");
-      const path = resolve(root, record.slice(3));
-      lines = files.get(path) ?? new Map<number, number>();
-      files.set(path, lines);
+      lines = sourceCoverage(record, root, files, lines);
     } else if (record.startsWith("DA:")) {
-      const [line, hits] = record.slice(3).split(",").map(Number);
-      if (!lines || line === undefined || hits === undefined || !Number.isSafeInteger(line) || line < 1 ||
-        !Number.isSafeInteger(hits) || hits < 0 || !/^\d+,\d+(?:,.*)?$/.test(record.slice(3))) {
-        throw new Error(`Invalid LCOV line record: ${record}`);
-      }
-      lines.set(line, (lines.get(line) ?? 0) + hits);
+      recordLineCoverage(record, lines);
     } else if (record === "end_of_record") {
       lines = undefined;
     }
   }
-  if (lines) throw new Error("Incomplete LCOV report: missing end_of_record");
-  if (files.size === 0) throw new Error("LCOV report contains no source records");
+  validateLcovComplete(files, lines);
   return files;
+}
+
+function sourceCoverage(record: string, root: string, files: Map<string, Map<number, number>>,
+  current: Map<number, number> | undefined) {
+  if (current || record.length === 3) throw new Error("Invalid LCOV source record");
+  const path = resolve(root, record.slice(3));
+  const lines = files.get(path) ?? new Map<number, number>();
+  files.set(path, lines);
+  return lines;
+}
+
+function recordLineCoverage(record: string, lines: Map<number, number> | undefined) {
+  const [line, hits] = record.slice(3).split(",").map(Number);
+  if (!lines || !isSafeCount(line, 1) || !isSafeCount(hits, 0) || !/^\d+,\d+(?:,.*)?$/.test(record.slice(3))) {
+    throw new Error(`Invalid LCOV line record: ${record}`);
+  }
+  lines.set(line, (lines.get(line) ?? 0) + hits);
+}
+
+function isSafeCount(value: number | undefined, minimum: number): value is number {
+  return value !== undefined && Number.isSafeInteger(value) && value >= minimum;
+}
+
+function validateLcovComplete(files: Map<string, Map<number, number>>, current: Map<number, number> | undefined) {
+  if (current) throw new Error("Incomplete LCOV report: missing end_of_record");
+  if (files.size === 0) throw new Error("LCOV report contains no source records");
 }
