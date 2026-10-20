@@ -1,0 +1,4 @@
+interface:
+  display_name: "CRAP for TypeScript"
+  short_description: "Rank TypeScript functions by complexity and coverage"
+  default_prompt: "Use $crap4ts to report the riskiest functions in this TypeScript project."
