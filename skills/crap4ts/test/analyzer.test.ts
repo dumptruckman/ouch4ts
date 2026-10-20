@@ -99,26 +99,28 @@ test("counts default parameters as decisions", () => {
   expect(entry?.complexity).toBe(2);
 });
 
-test("names runtime implementations while skipping declarations and overload signatures", () => {
-  const entries = analyze({
-    sources: [{ path: "src/functions.ts", text: `
+test.each([
+  { name: "overload implementations", text: `
 declare function external(): void;
 function overloaded(value: string): string;
 function overloaded(value: number): number;
 function overloaded(value: string | number) { return value; }
+`, names: ["overloaded"] },
+  { name: "class members", text: `
 class Worker {
   constructor() {}
   set ready(value: boolean) { console.log(value); }
   task = () => 1;
 }
-const tasks = { run: function () { return 1; } };
-const named = function alias() { return 1; };
-` }],
+`, names: ["Worker.constructor", "Worker.set ready", "Worker.task"] },
+  { name: "property-assigned expressions", text: "const tasks = { run: function () { return 1; } };", names: ["run"] },
+  { name: "named expressions", text: "const named = function alias() { return 1; };", names: ["alias"] },
+])("names $name while skipping signatures without bodies", ({ text, names }) => {
+  const entries = analyze({
+    sources: [{ path: "src/functions.ts", text }],
     lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
   });
-  expect(entries.map(entry => entry.name)).toEqual([
-    "overloaded", "Worker.constructor", "Worker.set ready", "Worker.task", "run", "alias",
-  ]);
+  expect(entries.map(entry => entry.name)).toEqual(names);
 });
 
 test("reports methods, arrows and callbacks separately, without charging nested decisions to parents", () => {
