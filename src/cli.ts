@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { spawnSync } from "node:child_process";
 import { analyze } from "./index.js";
+import { changedFunctionFilter } from "./changes.js";
 
 async function main() {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
@@ -12,6 +13,7 @@ async function main() {
     "source-root": { type: "string", multiple: true },
     lcov: { type: "string", default: "coverage/lcov.info" },
     "coverage-command": { type: "string", default: "npm run test:coverage" },
+    since: { type: "string" },
   } });
   if (values.help) {
     console.log(`Usage: crap4ts [options] [path-fragment ...]
@@ -20,12 +22,14 @@ async function main() {
   --lcov <path>              LCOV report. Default: coverage/lcov.info
   --coverage-command <cmd>   Shell command. Default: npm run test:coverage
   --use-existing-coverage    Read coverage without running tests or checking freshness
+  --since <ref>             Show functions changed since the merge base with ref
   -h, --help                Show this help
 
 Prints functions by descending CRAP score. Path fragments filter the table.
 Writes all analyzed functions to .metrics/crap.json on every successful run.`);
     return;
   }
+  const isChanged = values.since === undefined ? () => true : changedFunctionFilter(values.since);
   const roots = values["source-root"] ?? ["src"];
   const paths = [...new Set((await Promise.all(roots.map(discover))).flat().map(path => resolve(path)))];
   if (paths.length === 0) throw new Error(`No TypeScript sources found under ${roots.join(", ")}`);
@@ -41,7 +45,8 @@ Writes all analyzed functions to .metrics/crap.json on every successful run.`);
   const entries = analyze({ sources, lcov: await readFile(values.lcov, "utf8") });
   await mkdir(".metrics", { recursive: true });
   await writeFile(".metrics/crap.json", JSON.stringify({ entries }, null, 2) + "\n");
-  const visible = entries.filter(entry => positionals.length === 0 || positionals.some(filter => entry.file.includes(filter)));
+  const visible = entries.filter(entry => isChanged(entry) &&
+    (positionals.length === 0 || positionals.some(filter => entry.file.includes(filter))));
   console.log(formatReport(visible));
   const unknown = entries.filter(entry => entry.coverage === null).length;
   if (unknown) console.error(`Warning: ${unknown} functions have N/A coverage. Check LCOV source paths and source maps.`);

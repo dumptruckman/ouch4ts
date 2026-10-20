@@ -69,6 +69,23 @@ Entries sort by descending score, then file and line. Unknown scores come last. 
 
 Scores below 5 indicate low change risk. Scores from 5 to below 30 suggest focused tests or simpler control flow. Prioritize scores of 30 or more before changing those functions. These are heuristics, not a quality gate.
 
+## PR reports
+
+Use `--since` with the PR's target branch or another Git reference:
+
+```bash
+node /absolute/path/to/crap4ts/dist/cli.js --since origin/main
+node /absolute/path/to/crap4ts/dist/cli.js --since origin/main --use-existing-coverage orders
+```
+
+The analyzer finds the merge base of that reference and `HEAD`, then compares it with the current checkout. It prints functions whose current line ranges overlap added or modified lines. Deletions select a surviving function when the lines immediately before and after the deletion both remain inside that function. Fully deleted functions and pure renames produce no rows. An edited rename uses the new path.
+
+Scores still measure each complete function using current coverage. A nested change can select both the nested and enclosing function. Changes outside function ranges, including test-only changes, can produce an empty table. Path filters further narrow the table, while `.metrics/crap.json` retains all analyzed functions.
+
+The diff includes committed changes plus staged and unstaged tracked edits. Add new files to Git before analyzing them in this mode. Run from the project directory as usual, including projects below the Git root. Git and the target reference's history must be available locally; fetch the target branch and enough history when using a shallow checkout. Invalid references or missing merge bases fail before coverage runs.
+
+This reports current scores for changed functions. Comparing scores between revisions would require coverage from both revisions.
+
 ## Measurement conventions
 
 - Discover `.ts`, `.tsx`, `.mts`, and `.cts`. Skip `.d.ts`, `.d.mts`, `.d.cts`, `*.test.*`, and `*.spec.*` files. Skip directories named `node_modules`, `.git`, `dist`, `build`, `coverage`, `test`, `tests`, `__tests__`, and `__mocks__`. Directory symlinks are not followed. Source roots are explicit; `tsconfig` include and exclude rules are not consulted.

@@ -1,6 +1,6 @@
 ---
 name: crap4ts
-description: Calculate CRAP scores for TypeScript functions using cyclomatic complexity and test coverage. Use for a TypeScript CRAP report, complexity analysis, or identifying complex functions that need tests before refactoring.
+description: Calculate CRAP scores for TypeScript functions using cyclomatic complexity and test coverage. Use for TypeScript CRAP reports, including PR changes, complexity analysis, or identifying functions that need tests before refactoring.
 ---
 
 # CRAP for TypeScript
@@ -29,15 +29,20 @@ node /path/to/crap4ts/dist/cli.js --use-existing-coverage
 
 # Show only matching file paths in the table
 node /path/to/crap4ts/dist/cli.js --use-existing-coverage orders billing
+
+# Report functions touched by a PR relative to its target branch
+node /path/to/crap4ts/dist/cli.js --since origin/main
 ```
 
 A normal run requires the coverage command to succeed and update the LCOV file. A failed command or unchanged report stops analysis. `--use-existing-coverage` skips both the command and the freshness check.
 
 The default source root is `src`. Roots can be repeated. The analyzer discovers `.ts`, `.tsx`, `.mts`, and `.cts` files, excluding declarations, test files, and common dependency, test, and build directories. It reads source without executing it.
 
+For PR reports, use `--since` with the PR's actual target reference and ensure its history is available locally. The filter compares the merge base with the current checkout, including staged and unstaged tracked edits. New files enter the diff after being added to Git. It selects current function ranges overlapping changed lines, including internal deletions, and retains each function's complete score. Deleted functions and pure renames are omitted. Changes outside function ranges can yield an empty table. See the README's PR reports section for deletion and nested-function conventions.
+
 ## Read the results
 
-The table lists function, file and line, cyclomatic complexity, covered executable lines, and CRAP score, worst first. Every successful run replaces `.metrics/crap.json` with all functions under the configured roots. Path filters affect only the table. Present the riskiest functions with their locations and explain whether complexity or missing tests drives the score.
+The table lists function, file and line, cyclomatic complexity, covered executable lines, and CRAP score, worst first. Every successful run replaces `.metrics/crap.json` with all functions under the configured roots. Path filters and `--since` affect only the table. Present the riskiest functions with their locations and explain whether complexity or missing tests drives the score. PR reports show current scores; score differences between revisions require coverage for both revisions.
 
 ```text
 CRAP = CC² × (1 - coverage)³ + CC
