@@ -1,0 +1,4 @@
+interface:
+  display_name: "OUCH for TypeScript"
+  short_description: "Rank TypeScript functions by maintenance hassle"
+  default_prompt: "Use $ouch4ts to report the functions with the highest maintenance hassle in this TypeScript project."

@@ -23,7 +23,7 @@ function parseOptions(args: string[]) {
 export async function runCli(args: string[], cwd: string) {
   const { values, positionals } = parseOptions(args);
   if (values.help) {
-    console.log(`Usage: crap4ts [options] [path-fragment ...]
+    console.log(`Usage: ouch4ts [options] [path-fragment ...]
 
   --source-root <path>       Source directory, repeatable. Default: src
   --lcov <path>              LCOV report. Default: coverage/lcov.info
@@ -35,10 +35,11 @@ export async function runCli(args: string[], cwd: string) {
   --refresh                 Regenerate both comparison reports instead of using cache
   -h, --help                Show this help
 
-Normal reports sort by descending CRAP. Comparisons sort by descending score delta.
+Normal reports sort by descending OUCH. Comparisons sort by descending score delta.
+OUCH means Overall Upkeep and Change Hassle, derived from CRAP.
 Scores combine cyclomatic complexity, cognitive complexity, and line coverage.
-Path fragments filter the table. Normal reports write .metrics/crap.json;
-comparisons write .metrics/crap-comparison.json and cache full commit reports.`);
+Path fragments filter the table. Normal reports write .metrics/ouch.json;
+comparisons write .metrics/ouch-comparison.json and cache full commit reports.`);
     return;
   }
   validateReportMode(values);
@@ -48,7 +49,7 @@ comparisons write .metrics/crap-comparison.json and cache full commit reports.`)
     const report = await compareProject(values.compare, {
       ...options, setupCommand: values["setup-command"], refresh: values.refresh ?? false,
     });
-    await writeReport(cwd, "crap-comparison.json", report);
+    await writeReport(cwd, "ouch-comparison.json", report);
     console.log(formatComparison(report.entries.filter(entry =>
       matchesPath(entry.file, positionals))));
     return;
@@ -59,7 +60,7 @@ comparisons write .metrics/crap-comparison.json and cache full commit reports.`)
 async function reportCurrent(options: Parameters<typeof analyzeProject>[0], since: string | undefined, positionals: string[]) {
   const isChanged = since === undefined ? () => true : changedFunctionFilter(since, options.cwd);
   const entries = await analyzeProject(options);
-  await writeReport(options.cwd, "crap.json", { entries });
+  await writeReport(options.cwd, "ouch.json", { entries });
   const visible = entries.filter(entry => isChanged(entry) && matchesPath(entry.file, positionals));
   console.log(formatReport(visible));
   const unknown = entries.filter(entry => entry.coverage === null).length;
@@ -67,31 +68,31 @@ async function reportCurrent(options: Parameters<typeof analyzeProject>[0], sinc
 }
 
 function formatReport(entries: Awaited<ReturnType<typeof analyzeProject>>) {
-  const rows = [["Function", "File", "CC", "Cog", "Cov%", "CRAP"], ...entries.map(entry => [
+  const rows = [["Function", "File", "CC", "Cog", "Cov%", "OUCH"], ...entries.map(entry => [
     entry.name, `${entry.file}:${entry.line}`, String(entry.complexity), String(entry.cognitive),
     entry.coverage === null ? "N/A" : entry.coverage.toFixed(1) + "%",
-    entry.crap === null ? "N/A" : entry.crap.toFixed(1),
+    entry.ouch === null ? "N/A" : entry.ouch.toFixed(1),
   ])];
-  return formatTable("CRAP Report", rows);
+  return formatTable("OUCH Report", rows);
 }
 
 type Metric = Awaited<ReturnType<typeof analyzeProject>>[number];
 
 function formatComparison(entries: Awaited<ReturnType<typeof compareProject>>["entries"]) {
-  const rows = [["Function", "File", "CC base/head", "Cog base/head", "Cov% base/head", "CRAP base", "CRAP head", "Delta", "Status"],
+  const rows = [["Function", "File", "CC base/head", "Cog base/head", "Cov% base/head", "OUCH base", "OUCH head", "Delta", "Status"],
     ...entries.map(entry => [entry.name, entry.file,
       pairedComplexity(entry.base, entry.head, "complexity"), pairedComplexity(entry.base, entry.head, "cognitive"),
       `${sideScore(entry.base, "coverage")} / ${sideScore(entry.head, "coverage")}`,
-      sideScore(entry.base, "crap"), sideScore(entry.head, "crap"), formatDelta(entry.delta.crap), entry.status,
+      sideScore(entry.base, "ouch"), sideScore(entry.head, "ouch"), formatDelta(entry.delta.ouch), entry.status,
     ])];
-  return formatTable("CRAP Comparison", rows) + (entries.length === 0 ? "\nNo matching metric changes." : "");
+  return formatTable("OUCH Comparison", rows) + (entries.length === 0 ? "\nNo matching metric changes." : "");
 }
 
 function pairedComplexity(base: Metric | null, head: Metric | null, field: "complexity" | "cognitive") {
   return `${base?.[field] ?? "-"} / ${head?.[field] ?? "-"}`;
 }
 
-function sideScore(entry: Metric | null, field: "coverage" | "crap") {
+function sideScore(entry: Metric | null, field: "coverage" | "ouch") {
   if (entry === null) return "-";
   const value = entry[field];
   return value === null ? "N/A" : value.toFixed(1);

@@ -7,7 +7,7 @@ import { readCache, writeCache } from "../src/cache.js";
 const directories: string[] = [];
 const metric = {
   name: "price", file: "src/orders.ts", line: 1, endLine: 4,
-  complexity: 2, cognitive: 1, coverage: 50, crap: 3.5,
+  complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
 };
 
 afterEach(async () => {
@@ -15,15 +15,15 @@ afterEach(async () => {
 });
 
 async function cachePath() {
-  const directory = await mkdtemp(join(tmpdir(), "crap4ts-cache-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "ouch4ts-cache-test-"));
   directories.push(directory);
   return join(directory, "report.json");
 }
 
 test.each([
   { name: "known coverage", entry: metric },
-  { name: "zero cognitive complexity", entry: { ...metric, cognitive: 0, crap: 2.5 } },
-  { name: "unknown coverage", entry: { ...metric, coverage: null, crap: null } },
+  { name: "zero cognitive complexity", entry: { ...metric, cognitive: 0, ouch: 2.5 } },
+  { name: "unknown coverage", entry: { ...metric, coverage: null, ouch: null } },
 ])("round-trips a commit report with $name", async ({ entry }) => {
   const path = await cachePath();
   await writeCache(path, "commit", "settings", [entry]);
@@ -46,7 +46,7 @@ test.each([
     { name: "negative cognitive complexity", entry: { ...metric, cognitive: -1 } },
     { name: "fractional cognitive complexity", entry: { ...metric, cognitive: 0.5 } },
     { name: "out-of-range coverage", entry: { ...metric, coverage: 101 } },
-    { name: "missing score", entry: { ...metric, crap: undefined } },
+    { name: "missing score", entry: { ...metric, ouch: undefined } },
     { name: "numeric score with unknown coverage", entry: { ...metric, coverage: null } },
   ].map(({ name, entry }) => ({ name, report: { commit: "commit", settingsKey: "settings", entries: [entry] } })),
 ])("rejects a cached report with $name", async ({ report }) => {

@@ -34,7 +34,7 @@ export function analyze({ sources, lcov, projectRoot = process.cwd() }: Analysis
     }
     visit(source);
     return entries;
-  }).sort((a, b) => (b.crap ?? -1) - (a.crap ?? -1) || a.file.localeCompare(b.file) || a.line - b.line);
+  }).sort((a, b) => (b.ouch ?? -1) - (a.ouch ?? -1) || a.file.localeCompare(b.file) || a.line - b.line);
 }
 
 function className(node: ts.Node) {
@@ -104,7 +104,7 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
   return {
     name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity, cognitive,
     coverage: fraction === null ? null : fraction * 100,
-    crap: fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity + cognitive,
+    ouch: fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity + cognitive,
   };
 }
 

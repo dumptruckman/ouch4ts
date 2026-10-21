@@ -1,19 +1,19 @@
 # Commit comparisons
 
-Use this mode to explain how a PR changes measured risk, including coverage changes from test-only edits.
+Use this mode to explain how a PR changes OUCH scores, including coverage changes from test-only edits.
 
 ## Run a comparison
 
-Identify the PR's actual target reference and confirm its history is available locally. `--compare <ref>` resolves the merge base with committed `HEAD`. It ignores local source edits and untracked files. Use `--since` for current risk in working-copy changes.
+Identify the PR's actual target reference and confirm its history is available locally. `--compare <ref>` resolves the merge base with committed `HEAD`. It ignores local source edits and untracked files. Use `--since` for current scores in working-copy changes.
 
 Run from the target project directory:
 
 ```bash
-node /path/to/crap4ts/dist/cli.js --compare origin/develop \
+node /path/to/ouch4ts/dist/cli.js --compare origin/develop \
   --coverage-command 'npm run test:cov -- --runInBand --coverageReporters=lcov'
 
 # Regenerate reports after changes to external configuration or environment
-node /path/to/crap4ts/dist/cli.js --compare origin/develop --refresh \
+node /path/to/ouch4ts/dist/cli.js --compare origin/develop --refresh \
   --coverage-command 'npm run test:cov -- --runInBand --coverageReporters=lcov'
 ```
 
@@ -22,7 +22,7 @@ On a cache miss, the tool creates a temporary detached Git worktree for that com
 Setup defaults to `npm ci --ignore-scripts`. This uses each revision's lockfile and skips install lifecycle scripts. Supply `--setup-command` for another package manager or required generation steps. For example:
 
 ```bash
-node /path/to/crap4ts/dist/cli.js --compare origin/main \
+node /path/to/ouch4ts/dist/cli.js --compare origin/main \
   --setup-command 'pnpm install --frozen-lockfile --ignore-scripts && pnpm generate' \
   --coverage-command 'pnpm test:coverage'
 ```
@@ -37,9 +37,9 @@ Complete per-commit reports live at `.metrics/cache/<commit-sha>-<settings-finge
 
 Environment values and external services are outside the fingerprint. Use `--refresh` when those inputs change or when a test run was nondeterministic. Treat the cache as disposable local output; exclude `.metrics/cache/` from version control when tracking other metrics.
 
-The full comparison is saved as `.metrics/crap-comparison.json`, containing base and head commit hashes and comparison entries. Each entry has `name`, `file`, `status`, full `base` and `head` metrics, and a `delta` for cyclomatic complexity, cognitive complexity, coverage percentage points, and CRAP. Positional path filters narrow only the printed table. The normal `.metrics/crap.json` report is preserved.
+The full comparison is saved as `.metrics/ouch-comparison.json`, containing base and head commit hashes and comparison entries. Each entry has `name`, `file`, `status`, full `base` and `head` metrics, and a `delta` for cyclomatic complexity, cognitive complexity, coverage percentage points, and OUCH. Positional path filters narrow only the printed table. The normal `.metrics/ouch.json` report is preserved.
 
-Positive CRAP deltas indicate increased measured risk; negative deltas indicate improvement. Retain the current absolute score when explaining changes. A decrease from 100 to 90 still leaves a high score. Added and removed functions have no numeric delta. Unknown coverage keeps the affected coverage and CRAP deltas indeterminate, rather than treating them as zero. Both complexity deltas remain available, and cognitive-only changes appear even when coverage is unknown.
+Positive OUCH deltas indicate increased maintenance hassle; negative deltas indicate improvement. Retain the current absolute score when explaining changes. A decrease from 100 to 90 still leaves a high score. Added and removed functions have no numeric delta. Unknown coverage keeps the affected coverage and OUCH deltas indeterminate, rather than treating them as zero. Both complexity deltas remain available, and cognitive-only changes appear even when coverage is unknown.
 
 ## Function matching
 

@@ -2,15 +2,21 @@
 
 ## Score
 
-This analyzer uses a custom CRAP variant:
+OUCH stands for Overall Upkeep and Change Hassle. It is derived from CRAP, Change Risk Anti-Patterns, by adding cognitive complexity to the original score:
 
 ```text
-CRAP = cyclomatic² × (1 - coverage)³ + cyclomatic + cognitive
+CRAP = cyclomatic² × (1 - coverage)³ + cyclomatic
 ```
 
-Coverage is a fraction from 0 to 1 in the formula and a percentage in reports. A function with cyclomatic complexity 2, cognitive complexity 1, and 50% coverage scores 3.5. Full coverage leaves the sum of the two complexities. Cognitive complexity of zero preserves the coverage penalty. Classic CRAP score bands do not directly apply to this variant.
+OUCH retains that coverage penalty and adds a cognitive cost that remains at full coverage:
 
-JSON reports retain cyclomatic complexity in `complexity` and add `cognitive`, a nonnegative integer. These measurements remain available when coverage and CRAP are indeterminate.
+```text
+OUCH = cyclomatic² × (1 - coverage)³ + cyclomatic + cognitive
+```
+
+Coverage is a fraction from 0 to 1 in the formula and a percentage in reports. A function with cyclomatic complexity 2, cognitive complexity 1, and 50% coverage scores 3.5. Full coverage leaves the sum of the two complexities. Cognitive complexity of zero preserves the coverage penalty. Higher OUCH scores indicate more maintenance hassle; they do not estimate maintenance hours or the probability of a defect. Classic CRAP score bands do not directly apply to OUCH.
+
+JSON reports contain the score in `ouch`, cyclomatic complexity in `complexity`, and cognitive complexity in `cognitive`, a nonnegative integer. Both complexities remain available when coverage and OUCH are indeterminate.
 
 ## Source discovery and cyclomatic complexity
 

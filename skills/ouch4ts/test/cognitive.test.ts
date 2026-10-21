@@ -69,9 +69,9 @@ test("scores callbacks independently of their enclosing function and nesting", (
 }` }],
     lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
   });
-  expect(entries.map(({ name, cognitive, crap }) => ({ name, cognitive, crap }))).toEqual([
-    { name: "outer", cognitive: 1, crap: null },
-    { name: "outer.<anonymous@3:16>", cognitive: 1, crap: null },
+  expect(entries.map(({ name, cognitive, ouch }) => ({ name, cognitive, ouch }))).toEqual([
+    { name: "outer", cognitive: 1, ouch: null },
+    { name: "outer.<anonymous@3:16>", cognitive: 1, ouch: null },
   ]);
 });
 

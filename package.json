@@ -1,12 +1,12 @@
 {
-  "name": "crap4ts-workspace",
+  "name": "ouch4ts-workspace",
   "private": true,
-  "workspaces": ["skills/crap4ts"],
+  "workspaces": ["skills/ouch4ts"],
   "scripts": {
-    "build": "npm run build --workspace crap4ts",
-    "typecheck": "npm run typecheck --workspace crap4ts",
-    "test": "npm run test --workspace crap4ts --",
-    "test:coverage": "npm run test:coverage --workspace crap4ts",
-    "crap": "npm run crap --workspace crap4ts --"
+    "build": "npm run build --workspace ouch4ts",
+    "typecheck": "npm run typecheck --workspace ouch4ts",
+    "test": "npm run test --workspace ouch4ts --",
+    "test:coverage": "npm run test:coverage --workspace ouch4ts",
+    "ouch": "npm run ouch --workspace ouch4ts --"
   }
 }

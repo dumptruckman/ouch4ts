@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { resolve } from "node:path";
 import { analyze } from "../src/index.js";
 
-test("combines cyclomatic complexity, cognitive complexity, and executable line coverage", () => {
+test("reports OUCH from cyclomatic complexity, cognitive complexity, and executable line coverage", () => {
   const entries = analyze({
     sources: [{
       path: "src/orders.ts",
@@ -13,21 +13,21 @@ test("combines cyclomatic complexity, cognitive complexity, and executable line 
 
   expect(entries).toEqual([{
     name: "price", file: "src/orders.ts", line: 1, endLine: 4,
-    complexity: 2, cognitive: 1, coverage: 50, crap: 3.5,
+    complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
   }]);
 });
 
 test.each([
   { name: "uncovered nested conditions", body: "if (a) { if (b) { if (c) return 1; } }\nreturn 0;",
-    lines: "DA:2,0\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 0, crap: 26 } },
+    lines: "DA:2,0\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 0, ouch: 26 } },
   { name: "partly covered nested conditions", body: "if (a) { if (b) { if (c) return 1; } }\nreturn 0;",
-    lines: "DA:2,1\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 50, crap: 12 } },
+    lines: "DA:2,1\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 50, ouch: 12 } },
   { name: "fully covered nested conditions", body: "if (a) { if (b) { if (c) return 1; } }\nreturn 0;",
-    lines: "DA:2,1\nDA:3,1", expected: { complexity: 4, cognitive: 6, coverage: 100, crap: 10 } },
+    lines: "DA:2,1\nDA:3,1", expected: { complexity: 4, cognitive: 6, coverage: 100, ouch: 10 } },
   { name: "uncovered optional access", body: "return a?.b ?? 0;", lines: "DA:2,0",
-    expected: { complexity: 3, cognitive: 0, coverage: 0, crap: 12 } },
+    expected: { complexity: 3, cognitive: 0, coverage: 0, ouch: 12 } },
   { name: "fully covered optional access", body: "return a?.b ?? 0;", lines: "DA:2,1",
-    expected: { complexity: 3, cognitive: 0, coverage: 100, crap: 3 } },
+    expected: { complexity: 3, cognitive: 0, coverage: 100, ouch: 3 } },
 ])("scores $name without letting coverage erase cognitive complexity", ({ body, lines, expected }) => {
   const [entry] = analyze({
     sources: [{ path: "src/sample.ts", text: `function sample() {\n${body}\n}` }],
@@ -68,13 +68,13 @@ test("keeps an uncalled nested function's body out of its parent's line coverage
 }` }],
     lcov: "SF:src/nested.ts\nDA:2,1\nDA:3,0\nDA:4,0\nDA:6,1\nend_of_record\n",
   });
-  expect(entries.map(({ name, coverage, crap }) => ({ name, coverage, crap }))).toEqual([
-    { name: "outer.inner", coverage: 0, crap: 7 },
-    { name: "outer", coverage: 100, crap: 1 },
+  expect(entries.map(({ name, coverage, ouch }) => ({ name, coverage, ouch }))).toEqual([
+    { name: "outer.inner", coverage: 0, ouch: 7 },
+    { name: "outer", coverage: 100, ouch: 1 },
   ]);
 });
 
-test("maps exact file paths, merges LCOV records, and sorts known risks before unknown coverage", () => {
+test("maps exact file paths, merges LCOV records, and sorts known scores before unknown coverage", () => {
   const entries = analyze({
     sources: ["a", "b", "c"].map(folder => ({
       path: `src/${folder}/index.ts`, text: "export function run() { return 1; }",
@@ -82,10 +82,10 @@ test("maps exact file paths, merges LCOV records, and sorts known risks before u
     lcov: `SF:${resolve("src/a/index.ts")}\nDA:1,0\nend_of_record\n` +
       "SF:src/a/index.ts\nDA:1,2,checksum\nend_of_record\nSF:src/b/index.ts\nDA:1,0\nend_of_record\n",
   });
-  expect(entries.map(({ file, coverage, crap }) => ({ file, coverage, crap }))).toEqual([
-    { file: "src/b/index.ts", coverage: 0, crap: 2 },
-    { file: "src/a/index.ts", coverage: 100, crap: 1 },
-    { file: "src/c/index.ts", coverage: null, crap: null },
+  expect(entries.map(({ file, coverage, ouch }) => ({ file, coverage, ouch }))).toEqual([
+    { file: "src/b/index.ts", coverage: 0, ouch: 2 },
+    { file: "src/a/index.ts", coverage: 100, ouch: 1 },
+    { file: "src/c/index.ts", coverage: null, ouch: null },
   ]);
 });
 
@@ -157,11 +157,11 @@ export default function () { return <div />; }
     lcov: "SF:src/other.ts\nDA:1,0\nend_of_record\n",
   });
 
-  expect(entries.map(({ name, complexity, coverage, crap }) => ({ name, complexity, coverage, crap }))).toEqual([
-    { name: "Worker.run", complexity: 1, coverage: null, crap: null },
-    { name: "Worker.run.select", complexity: 2, coverage: null, crap: null },
-    { name: "Worker.run.<anonymous@5:23>", complexity: 2, coverage: null, crap: null },
-    { name: "Worker.get ready", complexity: 1, coverage: null, crap: null },
-    { name: "default", complexity: 1, coverage: null, crap: null },
+  expect(entries.map(({ name, complexity, coverage, ouch }) => ({ name, complexity, coverage, ouch }))).toEqual([
+    { name: "Worker.run", complexity: 1, coverage: null, ouch: null },
+    { name: "Worker.run.select", complexity: 2, coverage: null, ouch: null },
+    { name: "Worker.run.<anonymous@5:23>", complexity: 2, coverage: null, ouch: null },
+    { name: "Worker.get ready", complexity: 1, coverage: null, ouch: null },
+    { name: "default", complexity: 1, coverage: null, ouch: null },
   ]);
 });

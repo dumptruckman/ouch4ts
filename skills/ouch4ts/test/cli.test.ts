@@ -19,6 +19,7 @@ test("help works without source files or a coverage setup", async () => {
   const cwd = project({});
   const result = runBinary(cwd, "--help");
   expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("Usage: ouch4ts");
   expect(result.stdout).toContain("--use-existing-coverage");
   expect((await run(cwd, "--help")).stdout).toBe(result.stdout.trimEnd());
   expect(existsSync(join(cwd, ".metrics"))).toBe(false);
@@ -26,7 +27,7 @@ test("help works without source files or a coverage setup", async () => {
 
 test.each([
   { args: ["--use-existing-coverage"], status: 0, stdout: /price\s+src\/orders.ts:1\s+1\s+0\s+100\.0%\s+1\.0/, stderr: /^$/ },
-  { args: ["--unknown"], status: 1, stdout: /^$/, stderr: /crap4ts:.*Unknown option/ },
+  { args: ["--unknown"], status: 1, stdout: /^$/, stderr: /ouch4ts:.*Unknown option/ },
 ])("executable reports results and exit codes for $args", ({ args, status, stdout, stderr }) => {
   const cwd = project({
     "src/orders.ts": "export const price = () => 10;",
@@ -59,14 +60,14 @@ test("supports custom roots and coverage, filters the table, and rebuilds all me
     "lib/__tests__/helper.ts": "function helper() { return 1; }",
     "lib/node_modules/vendor/index.ts": "function vendor() { return 1; }",
     "cover.cjs": `const fs = require('node:fs'); fs.mkdirSync('reports'); fs.writeFileSync('reports/unit.lcov', 'SF:lib/orders.mts\\nDA:1,1\\nend_of_record\\n');`,
-    ".metrics/crap.json": JSON.stringify({ entries: [{ name: "obsolete" }] }),
+    ".metrics/ouch.json": JSON.stringify({ entries: [{ name: "obsolete" }] }),
   });
   const result = await run(cwd, "--source-root", "lib", "--source-root", "services", "--source-root", "lib",
     "--lcov", "reports/unit.lcov", "--coverage-command", "node cover.cjs", "orders");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("price");
   expect(result.stdout).not.toContain("work");
-  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toMatchObject({ entries: [
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({ entries: [
     { name: "price", coverage: 100 }, { name: "View", coverage: null }, { name: "work", coverage: null },
   ] });
   expect(result.stderr).toMatch(/2 functions.*N\/A/);
@@ -85,7 +86,7 @@ test.each([
   const result = await run(cwd);
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(message);
-  expect(existsSync(join(cwd, ".metrics/crap.json"))).toBe(false);
+  expect(existsSync(join(cwd, ".metrics/ouch.json"))).toBe(false);
 });
 
 test("runs the project's coverage script and replaces stale scores with fresh coverage", async () => {
@@ -97,8 +98,8 @@ test("runs the project's coverage script and replaces stale scores with fresh co
   });
   const result = await run(cwd);
   expect(result.status, result.stderr).toBe(0);
-  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toMatchObject({
-    entries: [{ name: "price", coverage: 100, crap: 1 }],
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({
+    entries: [{ name: "price", coverage: 100, ouch: 1 }],
   });
 });
 
@@ -107,7 +108,7 @@ afterEach(() => {
 });
 
 function project(files: Record<string, string>) {
-  const path = mkdtempSync(join(tmpdir(), "crap4ts-test-"));
+  const path = mkdtempSync(join(tmpdir(), "ouch4ts-test-"));
   projects.push(path);
   for (const [name, contents] of Object.entries(files)) {
     mkdirSync(dirname(join(path, name)), { recursive: true });
@@ -139,7 +140,7 @@ async function run(cwd: string, ...args: string[]) {
 }
 
 function git(cwd: string, ...args: string[]) {
-  return execFileSync("git", ["-c", "user.name=CRAP tests", "-c", "user.email=tests@example.com",
+  return execFileSync("git", ["-c", "user.name=OUCH tests", "-c", "user.email=tests@example.com",
     "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
 }
 
@@ -196,16 +197,17 @@ test("compare scores committed base and head in isolated checkouts and reports m
   writeFileSync(join(cwd, "src/orders.ts"), localEdit);
   const result = await runComparison(cwd, "--compare", "target");
   expect(result.status, result.stderr).toBe(0);
-  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  expect(result.stdout).toMatch(/^OUCH Comparison\n=+\n.*OUCH base\s+OUCH head/);
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report).toMatchObject({ base, head, entries: expect.arrayContaining([
     { name: "price", file: "src/orders.ts", status: "changed",
-      base: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 50, crap: 3.5 }),
-      head: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 100, crap: 3 }),
-      delta: { complexity: 0, cognitive: 0, coverage: 50, crap: -0.5 } },
+      base: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5 }),
+      head: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 100, ouch: 3 }),
+      delta: { complexity: 0, cognitive: 0, coverage: 50, ouch: -0.5 } },
     { name: "added", file: "src/orders.ts", status: "added", base: null,
-      head: expect.objectContaining({ crap: 1 }), delta: { complexity: null, cognitive: null, coverage: null, crap: null } },
+      head: expect.objectContaining({ ouch: 1 }), delta: { complexity: null, cognitive: null, coverage: null, ouch: null } },
     { name: "removed", file: "src/orders.ts", status: "removed", head: null,
-      base: expect.objectContaining({ crap: 2 }), delta: { complexity: null, cognitive: null, coverage: null, crap: null } },
+      base: expect.objectContaining({ ouch: 2 }), delta: { complexity: null, cognitive: null, coverage: null, ouch: null } },
   ]) });
   expect(report.entries).toHaveLength(3);
   expect(result.stdout).toContain("price");
@@ -225,13 +227,13 @@ test("compare reuses commit reports until refresh is requested", async () => {
   const cwd = comparisonProject();
   const first = await runComparison(cwd);
   expect(first.status, first.stderr).toBe(0);
-  const report = readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8");
+  const report = readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8");
   const calls = readFileSync(join(cwd, "calls.log"), "utf8");
   const second = await runComparison(cwd, "missing-file");
   expect(second.status, second.stderr).toBe(0);
   expect(second.stdout).not.toContain("price");
   expect(readFileSync(join(cwd, "calls.log"), "utf8")).toBe(calls);
-  expect(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).toBe(report);
+  expect(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8")).toBe(report);
   const cache = readdirSync(join(cwd, ".metrics/cache"));
   expect(cache).toHaveLength(2);
   expect(cache.some(name => name.includes(git(cwd, "rev-parse", "base").trim()))).toBe(true);
@@ -242,7 +244,7 @@ test("compare reuses commit reports until refresh is requested", async () => {
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
 });
 
-test("comparison reports cognitive changes even when coverage and CRAP are unknown", async () => {
+test("comparison reports cognitive changes even when coverage and OUCH are unknown", async () => {
   const cwd = comparisonProject({
     "src/logic.ts": "export function logic() { if (a) {} if (b) {} }\n",
   });
@@ -250,12 +252,12 @@ test("comparison reports cognitive changes even when coverage and CRAP are unkno
   commit(cwd, "Nest the conditions");
   const result = await runComparison(cwd);
   expect(result.status, result.stderr).toBe(0);
-  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.entries).toContainEqual({
     name: "logic", file: "src/logic.ts", status: "changed",
-    base: expect.objectContaining({ complexity: 3, cognitive: 2, coverage: null, crap: null }),
-    head: expect.objectContaining({ complexity: 3, cognitive: 3, coverage: null, crap: null }),
-    delta: { complexity: 0, cognitive: 1, coverage: null, crap: null },
+    base: expect.objectContaining({ complexity: 3, cognitive: 2, coverage: null, ouch: null }),
+    head: expect.objectContaining({ complexity: 3, cognitive: 3, coverage: null, ouch: null }),
+    delta: { complexity: 0, cognitive: 1, coverage: null, ouch: null },
   });
   expect(result.stdout).toContain("Cog base/head");
 });
@@ -281,14 +283,14 @@ test("comparison cache separates coverage settings and regenerates a damaged com
 test("failed comparison coverage preserves the previous report and cleans up its checkout", async () => {
   const cwd = comparisonProject();
   expect((await runComparison(cwd)).status).toBe(0);
-  const original = readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8");
+  const original = readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8");
   writeFileSync(join(cwd, "cover.cjs"), "process.exit(9);");
   git(cwd, "add", "cover.cjs");
   git(cwd, "commit", "-qm", "Break coverage");
   const failed = await runComparison(cwd);
   expect(failed.status).toBe(1);
   expect(failed.stderr).toContain("Coverage command failed: 9");
-  expect(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).toBe(original);
+  expect(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8")).toBe(original);
   expect(readdirSync(join(cwd, ".metrics/cache"))).toHaveLength(2);
   expect(git(cwd, "worktree", "list", "--porcelain").split("\n").filter(line => line.startsWith("worktree "))).toHaveLength(1);
 });
@@ -314,15 +316,15 @@ test("comparison matches renamed files and a unique callback after line numbers 
   commit(cwd, "Move functions");
   const result = await runComparison(cwd);
   expect(result.status, result.stderr).toBe(0);
-  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.entries).toEqual(expect.arrayContaining([
     expect.objectContaining({ name: "price", file: "src/purchases.ts", status: "changed",
-      base: expect.objectContaining({ file: "src/orders.ts" }), delta: { complexity: 0, cognitive: 0, coverage: 50, crap: -0.5 } }),
-    expect.objectContaining({ name: "stable", status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, crap: 0 } }),
+      base: expect.objectContaining({ file: "src/orders.ts" }), delta: { complexity: 0, cognitive: 0, coverage: 50, ouch: -0.5 } }),
+    expect.objectContaining({ name: "stable", status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, ouch: 0 } }),
   ]));
   const callbacks = report.entries.filter((entry: { name: string }) => entry.name.startsWith("callbacks.<anonymous@"));
   expect(callbacks).toHaveLength(1);
-  expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, crap: 0 } });
+  expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, ouch: 0 } });
 });
 
 test("comparison preserves unknown coverage without inventing a numeric score delta", async () => {
@@ -331,10 +333,10 @@ test("comparison preserves unknown coverage without inventing a numeric score de
   commit(cwd, "Omit price coverage");
   const result = await runComparison(cwd);
   expect(result.status, result.stderr).toBe(0);
-  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.entries).toContainEqual(expect.objectContaining({ name: "price", status: "changed",
-    base: expect.objectContaining({ crap: 3.5 }), head: expect.objectContaining({ coverage: null, crap: null }),
-    delta: { complexity: 0, cognitive: 0, coverage: null, crap: null },
+    base: expect.objectContaining({ ouch: 3.5 }), head: expect.objectContaining({ coverage: null, ouch: null }),
+    delta: { complexity: 0, cognitive: 0, coverage: null, ouch: null },
   }));
 });
 
@@ -343,14 +345,14 @@ test("comparison keeps ambiguous matches explicit without reporting unchanged gr
   const cwd = comparisonProject({ "src/duplicates.ts": before });
   const unchanged = await runComparison(cwd);
   expect(unchanged.status, unchanged.stderr).toBe(0);
-  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8")).entries
     .some((entry: { name: string }) => entry.name === "run")).toBe(false);
   writeFileSync(join(cwd, "src/duplicates.ts"), before.replace("if (a) {} if (b) {}", "if (a) { if (b) {} }"));
   git(cwd, "add", "src/duplicates.ts");
   git(cwd, "commit", "-qm", "Change one ambiguous function");
   const changed = await runComparison(cwd);
   expect(changed.status, changed.stderr).toBe(0);
-  const ambiguous = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries
+  const ambiguous = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8")).entries
     .filter((entry: { name: string }) => entry.name === "run");
   expect(ambiguous).toHaveLength(4);
   expect(ambiguous.every((entry: { status: string }) => entry.status === "added" || entry.status === "removed")).toBe(true);
@@ -388,7 +390,7 @@ test("comparison analyzes one commit once when the merge base is HEAD", async ()
   expect(result.stdout).toContain("No matching metric changes.");
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(2);
   expect(readdirSync(join(cwd, ".metrics/cache"))).toHaveLength(1);
-  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries).toEqual([]);
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8")).entries).toEqual([]);
 });
 
 test("since reports changed functions with full scores and preserves complete metrics", async () => {
@@ -407,8 +409,8 @@ test("since reports changed functions with full scores and preserves complete me
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toMatch(/changed\s+src\/orders.ts:1\s+2\s+1\s+50\.0%\s+3\.5/);
   expect(result.stdout).not.toContain("untouched");
-  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toMatchObject({ entries: [
-    { name: "changed", crap: 3.5 }, { name: "untouched", crap: 1 },
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({ entries: [
+    { name: "changed", ouch: 3.5 }, { name: "untouched", ouch: 1 },
   ] });
 });
 
@@ -516,7 +518,7 @@ test("since gives an empty table for an unchanged checkout without losing its me
   const result = await run(cwd, "--since", "HEAD", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).not.toContain("untouched");
-  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toMatchObject({
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({
     entries: [{ name: "untouched" }],
   });
 });
@@ -552,15 +554,16 @@ test("since excludes unchanged functions between hunks even when Git is configur
   expect(result.stdout).not.toContain("middle");
 });
 
-test("prints function risk and saves a machine-readable metrics report", async () => {
+test("prints OUCH scores and saves a machine-readable metrics report", async () => {
   const cwd = project({
     "src/orders.ts": "export function price(vip: boolean) {\n  if (vip) return 10;\n  return 20;\n}\n",
     "coverage/lcov.info": "SF:src/orders.ts\nDA:2,1\nDA:3,0\nend_of_record\n",
   });
   const result = await run(cwd, "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toMatch(/^OUCH Report\n=+\nFunction\s+File\s+CC\s+Cog\s+Cov%\s+OUCH\n/);
   expect(result.stdout).toMatch(/price\s+src\/orders.ts:1\s+2\s+1\s+50\.0%\s+3\.5/);
-  expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toEqual({ entries: [{
-    name: "price", file: "src/orders.ts", line: 1, endLine: 4, complexity: 2, cognitive: 1, coverage: 50, crap: 3.5,
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toEqual({ entries: [{
+    name: "price", file: "src/orders.ts", line: 1, endLine: 4, complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
   }] });
 });
