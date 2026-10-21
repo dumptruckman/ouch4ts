@@ -29,12 +29,16 @@ export function analyze({ sources, lcov, projectRoot = process.cwd() }: Analysis
         ts.forEachChild(node, child => visit(child, name + "."));
         return;
       }
-      const container = (ts.isClassDeclaration(node) || ts.isClassExpression(node)) ? node.name?.text : undefined;
+      const container = className(node);
       ts.forEachChild(node, child => visit(child, container ? scope + container + "." : scope));
     }
     visit(source);
     return entries;
   }).sort((a, b) => (b.crap ?? -1) - (a.crap ?? -1) || a.file.localeCompare(b.file) || a.line - b.line);
+}
+
+function className(node: ts.Node) {
+  if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return node.name?.text;
 }
 
 type RuntimeFunction = (
@@ -142,16 +146,18 @@ function readLcov(text: string, root: string) {
   const files = new Map<string, Map<number, number>>();
   let lines: Map<number, number> | undefined;
   for (const record of text.split(/\r?\n/)) {
-    if (record.startsWith("SF:")) {
-      lines = sourceCoverage(record, root, files, lines);
-    } else if (record.startsWith("DA:")) {
-      recordLineCoverage(record, lines);
-    } else if (record === "end_of_record") {
-      lines = undefined;
-    }
+    lines = readCoverageRecord(record, root, files, lines);
   }
   validateLcovComplete(files, lines);
   return files;
+}
+
+function readCoverageRecord(record: string, root: string, files: Map<string, Map<number, number>>,
+  lines: Map<number, number> | undefined) {
+  if (record.startsWith("SF:")) return sourceCoverage(record, root, files, lines);
+  if (record === "end_of_record") return undefined;
+  if (record.startsWith("DA:")) recordLineCoverage(record, lines);
+  return lines;
 }
 
 function sourceCoverage(record: string, root: string, files: Map<string, Map<number, number>>,
@@ -164,11 +170,17 @@ function sourceCoverage(record: string, root: string, files: Map<string, Map<num
 }
 
 function recordLineCoverage(record: string, lines: Map<number, number> | undefined) {
+  if (!lines) throw new Error(`Invalid LCOV line record: ${record}`);
+  const { line, hits } = parseLineCoverage(record);
+  lines.set(line, (lines.get(line) ?? 0) + hits);
+}
+
+function parseLineCoverage(record: string) {
   const [line, hits] = record.slice(3).split(",").map(Number);
-  if (!lines || !isSafeCount(line, 1) || !isSafeCount(hits, 0) || !/^\d+,\d+(?:,.*)?$/.test(record.slice(3))) {
+  if (!isSafeCount(line, 1) || !isSafeCount(hits, 0) || !/^\d+,\d+(?:,.*)?$/.test(record.slice(3))) {
     throw new Error(`Invalid LCOV line record: ${record}`);
   }
-  lines.set(line, (lines.get(line) ?? 0) + hits);
+  return { line, hits };
 }
 
 function isSafeCount(value: number | undefined, minimum: number): value is number {

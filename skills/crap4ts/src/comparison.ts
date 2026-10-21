@@ -87,14 +87,12 @@ async function snapshot(commit: string, options: SnapshotOptions) {
 function renamedFiles(base: string, head: string, root: string, cwd: string) {
   const renames = new Map<string, string>();
   const paths = git(["diff", "--no-ext-diff", "--no-textconv", "--no-relative", "--name-status", "-z",
-    "--find-renames", base, head, "--"], cwd).split("\0");
+    "--find-renames", base, head, "--"], cwd).split("\0").slice(0, -1);
   for (let index = 0; index < paths.length;) {
-    const status = paths[index++];
-    const from = paths[index++];
-    if (!status || from === undefined) break;
-    if (hasDestinationPath(status)) {
-      recordRename(renames, status, from, paths[index++], root, cwd);
-    }
+    const status = paths[index++]!;
+    const from = paths[index++]!;
+    const to = hasDestinationPath(status) ? paths[index++] : undefined;
+    recordRename(renames, status, from, to, root, cwd);
   }
   return renames;
 }
@@ -141,13 +139,18 @@ function unchangedGroup(group: MetricGroup) {
 }
 
 function groupScores(entries: Metric[]) {
-  const scores = entries.map(entry => JSON.stringify([entry.complexity, entry.cognitive, entry.coverage, entry.crap]));
+  const scores = entries.map(entry => {
+    const values = scoreFields.map(field => entry[field]);
+    return JSON.stringify(values);
+  });
   return scores.sort().join("\0");
 }
 
+const scoreFields = ["complexity", "cognitive", "coverage", "crap"] as const;
+
 function sameScores(base: Metric | null, head: Metric | null) {
-  return base !== null && head !== null && base.complexity === head.complexity && base.cognitive === head.cognitive &&
-    base.coverage === head.coverage && base.crap === head.crap;
+  if (base === null || head === null) return false;
+  return scoreFields.every(field => base[field] === head[field]);
 }
 
 function comparisonEntry(base: Metric | null, head: Metric | null) {
@@ -187,8 +190,11 @@ function scoreDelta(base: number | null, head: number | null) {
 type ComparisonEntry = NonNullable<ReturnType<typeof comparisonEntry>>;
 
 function compareChanges(a: ComparisonEntry, b: ComparisonEntry) {
-  return (b.delta.crap ?? 0) - (a.delta.crap ?? 0) || currentOrPreviousRisk(b) - currentOrPreviousRisk(a) ||
-    a.file.localeCompare(b.file) || a.name.localeCompare(b.name);
+  return compareRisk(a, b) || a.file.localeCompare(b.file) || a.name.localeCompare(b.name);
+}
+
+function compareRisk(a: ComparisonEntry, b: ComparisonEntry) {
+  return (b.delta.crap ?? 0) - (a.delta.crap ?? 0) || currentOrPreviousRisk(b) - currentOrPreviousRisk(a);
 }
 
 function currentOrPreviousRisk(entry: ComparisonEntry) {

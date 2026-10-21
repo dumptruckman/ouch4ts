@@ -119,10 +119,13 @@ function formatTable(title: string, rows: string[][]) {
 type CliValues = ReturnType<typeof parseOptions>["values"];
 
 function validateReportMode(values: CliValues) {
-  if (values.compare !== undefined && (values.since !== undefined || values["use-existing-coverage"])) {
+  if (values.compare === undefined) {
+    if (values.refresh) throw new Error("--refresh requires --compare");
+    return;
+  }
+  if (values.since !== undefined || values["use-existing-coverage"]) {
     throw new Error("--compare cannot combine with --since or --use-existing-coverage");
   }
-  if (values.refresh && values.compare === undefined) throw new Error("--refresh requires --compare");
 }
 
 function projectOptions(values: CliValues, cwd: string) {

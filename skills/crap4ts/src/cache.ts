@@ -18,9 +18,13 @@ export async function readCache(path: string, commit: string, settingsKey: strin
 }
 
 function cachedEntries(data: unknown, commit: string, settingsKey: string) {
-  if (!isRecord(data) || data.commit !== commit || data.settingsKey !== settingsKey) return null;
+  if (!isMatchingReport(data, commit, settingsKey)) return null;
   if (!Array.isArray(data.entries) || !data.entries.every(isMetric)) return null;
   return data.entries;
+}
+
+function isMatchingReport(data: unknown, commit: string, settingsKey: string): data is Record<string, unknown> {
+  return isRecord(data) && data.commit === commit && data.settingsKey === settingsKey;
 }
 
 export async function writeCache(path: string, commit: string, settingsKey: string, entries: Metric[]) {
@@ -35,8 +39,12 @@ export async function writeCache(path: string, commit: string, settingsKey: stri
 }
 
 function isMetric(value: unknown): value is Metric {
-  return isRecord(value) && hasFunctionIdentity(value) && hasFunctionRange(value) &&
-    isIntegerAtLeast(value.complexity, 1) && isIntegerAtLeast(value.cognitive, 0) && hasRiskScores(value);
+  if (!isRecord(value)) return false;
+  return hasFunctionIdentity(value) && hasFunctionRange(value) && hasComplexities(value) && hasRiskScores(value);
+}
+
+function hasComplexities(value: Record<string, unknown>) {
+  return isIntegerAtLeast(value.complexity, 1) && isIntegerAtLeast(value.cognitive, 0);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

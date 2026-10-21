@@ -23,10 +23,12 @@ export function cognitiveComplexity(node: ts.FunctionLikeDeclaration) {
 
 function definitionExpressions(node: ts.SignatureDeclaration) {
   if (!("body" in node) || node.body === undefined) return [];
-  const name = node.name;
-  const computedName = name !== undefined && ts.isComputedPropertyName(name) ? [name.expression] : [];
   const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];
-  return [...computedName, ...decorators.map(decorator => decorator.expression)];
+  return [...computedNameExpressions(node.name), ...decorators.map(decorator => decorator.expression)];
+}
+
+function computedNameExpressions(name: ts.DeclarationName | undefined) {
+  return name !== undefined && ts.isComputedPropertyName(name) ? [name.expression] : [];
 }
 
 function controlFlowIncrement(node: ts.Node, nesting: number) {
@@ -49,17 +51,17 @@ function isNestingStructure(node: ts.Node) {
 }
 
 function nestedChildren(node: ts.Node): readonly ts.Node[] {
-  if (ts.isIfStatement(node)) {
-    if (node.elseStatement !== undefined && !ts.isIfStatement(node.elseStatement)) {
-      return [node.thenStatement, node.elseStatement];
-    }
-    return [node.thenStatement];
-  }
   if (ts.isIterationStatement(node, false)) return [node.statement];
   if (ts.isCaseBlock(node)) return node.clauses;
   if (ts.isCatchClause(node)) return [node.block];
+  return conditionalBranches(node);
+}
+
+function conditionalBranches(node: ts.Node): readonly ts.Node[] {
   if (ts.isConditionalExpression(node)) return [node.whenTrue, node.whenFalse];
-  return [];
+  if (!ts.isIfStatement(node)) return [];
+  if (node.elseStatement === undefined || ts.isIfStatement(node.elseStatement)) return [node.thenStatement];
+  return [node.thenStatement, node.elseStatement];
 }
 
 const logicalOperators = new Set([
@@ -72,13 +74,17 @@ function isLogicalExpression(node: ts.Node): node is ts.BinaryExpression {
 
 function logicalIncrement(node: ts.Node, counted: Set<ts.BinaryExpression>) {
   if (!isLogicalExpression(node) || counted.has(node)) return 0;
-  const jsxShortCircuit = isJsxShortCircuit(node);
+  const sequence = logicalSequence(node);
+  for (const expression of sequence) counted.add(expression);
+  return isJsxShortCircuit(node) ? 0 : logicalSequenceCost(sequence);
+}
+
+function logicalSequenceCost(sequence: ts.BinaryExpression[]) {
   let complexity = 0;
   let previous: ts.SyntaxKind | undefined;
-  for (const expression of logicalSequence(node)) {
-    counted.add(expression);
+  for (const expression of sequence) {
     const operator = expression.operatorToken.kind;
-    if (!jsxShortCircuit && operator === ts.SyntaxKind.AmpersandAmpersandToken && operator !== previous) complexity++;
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken && operator !== previous) complexity++;
     previous = operator;
   }
   return complexity;
@@ -98,8 +104,7 @@ function isJsxShortCircuit(node: ts.BinaryExpression) {
 
 function hasUniformLogicalOperator(node: ts.Node, operator: ts.SyntaxKind): boolean {
   if (ts.isParenthesizedExpression(node)) return hasUniformLogicalOperator(node.expression, operator);
-  if (ts.isConditionalExpression(node)) return false;
-  if (!isLogicalExpression(node)) return true;
+  if (!isLogicalExpression(node)) return !ts.isConditionalExpression(node);
   return node.operatorToken.kind === operator && hasUniformLogicalOperator(node.left, operator) &&
     hasUniformLogicalOperator(node.right, operator);
 }

@@ -19,14 +19,16 @@ function changedRanges(diff: string, root: string) {
   const changes = new Map<string, { start: number; count: number }[]>();
   let file: string | undefined;
   for (const line of diff.split("\n")) {
-    if (line.startsWith("diff --git ")) file = undefined;
-    else if (file === undefined && line.startsWith("+++ ")) {
-      file = currentFilePath(line, root);
-    } else if (file) {
-      addHunk(changes, file, line);
-    }
+    file = currentDiffFile(line, root, file);
+    if (file !== undefined) addHunk(changes, file, line);
   }
   return changes;
+}
+
+function currentDiffFile(line: string, root: string, file: string | undefined) {
+  if (line.startsWith("diff --git ")) return undefined;
+  if (file === undefined && line.startsWith("+++ ")) return currentFilePath(line, root);
+  return file;
 }
 
 function currentFilePath(header: string, root: string) {
