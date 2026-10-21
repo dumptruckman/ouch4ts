@@ -18,7 +18,7 @@ After execution, compare the checkout with its initial state. If unexpected proj
 ## Prepare
 
 1. Inspect the target project's source roots, test scripts, package manager, and runtime requirements. Verify that compatible runtimes and package-manager executables needed for the selected mode are available. For fresh coverage in the current checkout, verify that its runner and coverage provider are installed and can produce LCOV through existing configuration or command-line options. For comparisons, apply the per-revision checks in [commit comparisons](references/comparison.md). Existing LCOV needs no installed runner or provider. Read [coverage prerequisites](references/coverage.md) for runner-specific checks or source-map problems. If prerequisites are missing, stop with exact runtime, dependency/version, or configuration recommendations.
-2. Resolve this skill's directory to an absolute path. npm package installs include `dist/cli.js`. For a skills.sh or source install, use `nvm use` in the skill directory, install dependencies with `npm ci` if needed, and run `npm run build`. Reuse that build on later invocations.
+2. Resolve this skill's directory to an absolute real path. Reuse its `dist/cli.js` when that build and its declared runtime dependencies are present. npm package installs include the build. For missing dependencies or a missing build, follow [analyzer bootstrap](references/bootstrap.md); install and build only outside the target repository.
 3. Run from the target project directory. The analyzer needs Node 22 or newer. Keep the project's runtime when generating coverage; with an older project runtime, generate coverage first and use a compatible Node for `--use-existing-coverage`.
 
 ## Choose the report
