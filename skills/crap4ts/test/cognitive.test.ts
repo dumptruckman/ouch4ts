@@ -74,3 +74,26 @@ test("scores callbacks independently of their enclosing function and nesting", (
     { name: "outer.<anonymous@3:16>", cognitive: 1, crap: null },
   ]);
 });
+
+test.each([
+  { name: "computed method names", text: `function outer() {
+  const worker = { [a ? "a" : "b"]() { if (c) {} } };
+}`, expected: [{ name: "outer", cognitive: 1 }, { name: 'outer.[a ? "a" : "b"]', cognitive: 1 }] },
+  { name: "method decorators", text: `function outer() {
+  class Worker {
+    @decorate(a ? b : c)
+    run() { if (d) {} }
+  }
+}`, expected: [{ name: "outer", cognitive: 1 }, { name: "outer.Worker.run", cognitive: 1 }] },
+  { name: "parameter decorators", text: `function outer() {
+  class Worker {
+    run(@decorate(a ? b : c) value: unknown) { if (d) {} }
+  }
+}`, expected: [{ name: "outer", cognitive: 0 }, { name: "outer.Worker.run", cognitive: 2 }] },
+])("assigns $name to their function scope", ({ text, expected }) => {
+  const entries = analyze({
+    sources: [{ path: "src/scopes.ts", text }],
+    lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(entries.map(({ name, cognitive }) => ({ name, cognitive }))).toEqual(expected);
+});

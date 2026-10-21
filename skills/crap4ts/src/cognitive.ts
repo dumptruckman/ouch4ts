@@ -5,7 +5,10 @@ export function cognitiveComplexity(node: ts.FunctionLikeDeclaration) {
   let complexity = 0;
   const countedLogical = new Set<ts.BinaryExpression>();
   function visit(child: ts.Node, nesting: number) {
-    if (ts.isFunctionLike(child)) return;
+    if (ts.isFunctionLike(child)) {
+      for (const expression of definitionExpressions(child)) visit(expression, nesting);
+      return;
+    }
     complexity += controlFlowIncrement(child, nesting);
     complexity += logicalIncrement(child, countedLogical);
     const nested = nestedChildren(child);
@@ -16,6 +19,14 @@ export function cognitiveComplexity(node: ts.FunctionLikeDeclaration) {
   for (const parameter of node.parameters) visit(parameter, 0);
   if (node.body !== undefined) visit(node.body, 0);
   return complexity;
+}
+
+function definitionExpressions(node: ts.SignatureDeclaration) {
+  if (!("body" in node) || node.body === undefined) return [];
+  const name = node.name;
+  const computedName = name !== undefined && ts.isComputedPropertyName(name) ? [name.expression] : [];
+  const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];
+  return [...computedName, ...decorators.map(decorator => decorator.expression)];
 }
 
 function controlFlowIncrement(node: ts.Node, nesting: number) {

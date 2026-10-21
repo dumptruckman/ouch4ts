@@ -3,8 +3,8 @@
     {
       "name": "nestedChildren",
       "file": "src/cognitive.ts",
-      "line": 40,
-      "endLine": 52,
+      "line": 51,
+      "endLine": 63,
       "complexity": 8,
       "cognitive": 8,
       "coverage": 100,
@@ -23,8 +23,8 @@
     {
       "name": "logicalIncrement",
       "file": "src/cognitive.ts",
-      "line": 62,
-      "endLine": 74,
+      "line": 73,
+      "endLine": 85,
       "complexity": 7,
       "cognitive": 5,
       "coverage": 100,
@@ -41,10 +41,20 @@
       "crap": 12
     },
     {
+      "name": "definitionExpressions",
+      "file": "src/cognitive.ts",
+      "line": 24,
+      "endLine": 30,
+      "complexity": 7,
+      "cognitive": 4,
+      "coverage": 100,
+      "crap": 11
+    },
+    {
       "name": "hasUniformLogicalOperator",
       "file": "src/cognitive.ts",
-      "line": 88,
-      "endLine": 94,
+      "line": 99,
+      "endLine": 105,
       "complexity": 6,
       "cognitive": 4,
       "coverage": 100,
@@ -123,8 +133,8 @@
     {
       "name": "controlFlowIncrement",
       "file": "src/cognitive.ts",
-      "line": 21,
-      "endLine": 26,
+      "line": 32,
+      "endLine": 37,
       "complexity": 5,
       "cognitive": 3,
       "coverage": 100,
@@ -223,8 +233,8 @@
     {
       "name": "conditionIncrement",
       "file": "src/cognitive.ts",
-      "line": 28,
-      "endLine": 33,
+      "line": 39,
+      "endLine": 44,
       "complexity": 4,
       "cognitive": 3,
       "coverage": 100,
@@ -297,6 +307,16 @@
       "endLine": 61,
       "complexity": 4,
       "cognitive": 2,
+      "coverage": 100,
+      "crap": 6
+    },
+    {
+      "name": "cognitiveComplexity.visit",
+      "file": "src/cognitive.ts",
+      "line": 7,
+      "endLine": 18,
+      "complexity": 3,
+      "cognitive": 3,
       "coverage": 100,
       "crap": 6
     },
@@ -384,7 +404,7 @@
       "name": "cognitiveComplexity",
       "file": "src/cognitive.ts",
       "line": 4,
-      "endLine": 19,
+      "endLine": 22,
       "complexity": 3,
       "cognitive": 2,
       "coverage": 100,
@@ -393,8 +413,8 @@
     {
       "name": "logicalSequence",
       "file": "src/cognitive.ts",
-      "line": 76,
-      "endLine": 80,
+      "line": 87,
+      "endLine": 91,
       "complexity": 3,
       "cognitive": 2,
       "coverage": 100,
@@ -403,8 +423,8 @@
     {
       "name": "isJsxShortCircuit",
       "file": "src/cognitive.ts",
-      "line": 82,
-      "endLine": 86,
+      "line": 93,
+      "endLine": 97,
       "complexity": 3,
       "cognitive": 2,
       "coverage": 100,
@@ -603,8 +623,8 @@
     {
       "name": "isNestingStructure",
       "file": "src/cognitive.ts",
-      "line": 35,
-      "endLine": 38,
+      "line": 46,
+      "endLine": 49,
       "complexity": 4,
       "cognitive": 0,
       "coverage": 100,
@@ -721,20 +741,10 @@
       "crap": 3
     },
     {
-      "name": "cognitiveComplexity.visit",
-      "file": "src/cognitive.ts",
-      "line": 7,
-      "endLine": 15,
-      "complexity": 2,
-      "cognitive": 1,
-      "coverage": 100,
-      "crap": 3
-    },
-    {
       "name": "isLogicalExpression",
       "file": "src/cognitive.ts",
-      "line": 58,
-      "endLine": 60,
+      "line": 69,
+      "endLine": 71,
       "complexity": 2,
       "cognitive": 1,
       "coverage": 100,
@@ -931,10 +941,20 @@
       "crap": 1
     },
     {
-      "name": "cognitiveComplexity.visit.<anonymous@12:28>",
+      "name": "cognitiveComplexity.visit.<anonymous@15:28>",
       "file": "src/cognitive.ts",
-      "line": 12,
-      "endLine": 14,
+      "line": 15,
+      "endLine": 17,
+      "complexity": 1,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 1
+    },
+    {
+      "name": "definitionExpressions.<anonymous@29:46>",
+      "file": "src/cognitive.ts",
+      "line": 29,
+      "endLine": 29,
       "complexity": 1,
       "cognitive": 0,
       "coverage": 100,
