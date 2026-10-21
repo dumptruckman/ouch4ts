@@ -57,7 +57,7 @@ By default, the analyzer runs `npm run test:coverage`, requires an updated `cove
 
 The skill checks existing coverage prerequisites before running tests. Missing tools or required configuration changes stop the report with setup recommendations; the agent does not install project dependencies or edit the project's setup. See [coverage prerequisites](skills/ouch4ts/references/coverage.md) for Vitest, Jest, and c8. Coverage must refer to the original TypeScript, with paths relative to the current directory or absolute paths in the same checkout. Include untested files in coverage through existing settings or command-line options.
 
-Report requests permit generated coverage and `.metrics` output. The skill preserves project source, tests, snapshots, configuration, manifests, lockfiles, and the original checkout's installed dependencies. It inspects commands before execution and checks for unexpected changes afterward, reporting them without automatically reverting files. These are agent instructions, not filesystem enforcement; project commands can still write other files. See [the project write policy](skills/ouch4ts/SKILL.md#project-writes).
+The skill leaves the target repository unchanged except for reports, coverage files, caches, and other tool-generated artifacts. See [the project write policy](skills/ouch4ts/SKILL.md#project-writes).
 
 As a separate setup action, you can install the built checkout as a local development dependency in a target project:
 
