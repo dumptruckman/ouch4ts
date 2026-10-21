@@ -21,11 +21,11 @@ On a cache miss, the tool creates a temporary detached Git worktree for that com
 
 Before running a comparison, inspect both revisions' manifests, lockfiles, test scripts, and coverage configuration. Each revision must already declare compatible runner/provider dependencies and support LCOV with existing configuration or command-line options. If either revision lacks a prerequisite, stop and identify the revision and required setup change. Installed tools in the original checkout do not satisfy these checks.
 
-Setup defaults to `npm ci --ignore-scripts`. Restoring each revision's locked dependencies is allowed only in its temporary checkout; verify that the required tools are installed there before coverage runs. This skips install lifecycle scripts. Supply `--setup-command` for another package manager or existing required generation steps, keeping the lockfile frozen. For example:
+Setup defaults to `npm ci --ignore-scripts`. Restoring each revision's locked dependencies is allowed only in its temporary checkout; verify that the required tools are installed there before coverage runs. This skips install lifecycle scripts. Supply `--setup-command` for another package manager or existing build steps that write generated build output, following [the project write policy](../SKILL.md#project-writes) and keeping the lockfile frozen. For example:
 
 ```bash
 node /path/to/ouch4ts/dist/cli.js --compare origin/main \
-  --setup-command 'pnpm install --frozen-lockfile --ignore-scripts && pnpm generate' \
+  --setup-command 'pnpm install --frozen-lockfile --ignore-scripts' \
   --coverage-command 'pnpm test:coverage'
 ```
 
