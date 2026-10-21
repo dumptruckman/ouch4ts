@@ -55,7 +55,7 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js \
 
 By default, the analyzer runs `npm run test:coverage`, requires an updated `coverage/lcov.info`, and scans `src`. It checks freshness using file metadata. A failed command, missing or unchanged report, invalid LCOV, or malformed TypeScript exits with code 1 before writing metrics. `--use-existing-coverage` trusts the existing report and skips the command and freshness check. Older metrics remain on disk after a failed run.
 
-See [coverage setup](skills/ouch4ts/references/coverage.md) for Vitest, Jest, and c8. Coverage must refer to the original TypeScript, with paths relative to the current directory or absolute paths in the same checkout. Include untested files in the runner's coverage configuration.
+The skill checks existing coverage prerequisites before running tests. Missing tools or required configuration changes stop the report with setup recommendations; the agent does not install project dependencies or edit the project's setup. See [coverage prerequisites](skills/ouch4ts/references/coverage.md) for Vitest, Jest, and c8. Coverage must refer to the original TypeScript, with paths relative to the current directory or absolute paths in the same checkout. Include untested files in coverage through existing settings or command-line options.
 
 You can also install the built checkout as a local development dependency in a target project:
 
