@@ -39,6 +39,8 @@ Replace `/path/to/ouch4ts` with the resolved skill directory. Use `--help` for o
 
 Report the largest current scores and score increases with function locations. Explain the cyclomatic (`CC`), cognitive (`Cog`), and coverage contributions. Full coverage leaves both complexity costs in the score. Read [measurement conventions](references/measurement.md) for the formula and cognitive counting rules. Calibrate project-specific limits against representative code rather than applying classic CRAP score bands.
 
+For successful comparisons, state whether each distinct commit's report was reused from cache or regenerated, using the diagnostics described in [cache and output](references/comparison.md#cache-and-output).
+
 `N/A` means coverage is indeterminate. Check coverage inclusion, paths, and source maps before attributing it to missing tests. LCOV measures executable lines; shared lines can share hits, and coverage does not establish useful assertions or full branch coverage. Use the runner's detailed report to investigate suspicious scores. See [measurement conventions](references/measurement.md) when those details matter.
 
 Normal runs save all analyzed functions in `.metrics/ouch.json`. `--since` and path filters affect the displayed table. A report request authorizes analysis; propose tests or refactoring and perform those changes when requested.
