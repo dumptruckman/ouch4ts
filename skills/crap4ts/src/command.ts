@@ -36,6 +36,7 @@ export async function runCli(args: string[], cwd: string) {
   -h, --help                Show this help
 
 Normal reports sort by descending CRAP. Comparisons sort by descending score delta.
+Scores combine cyclomatic complexity, cognitive complexity, and line coverage.
 Path fragments filter the table. Normal reports write .metrics/crap.json;
 comparisons write .metrics/crap-comparison.json and cache full commit reports.`);
     return;
@@ -66,8 +67,8 @@ async function reportCurrent(options: Parameters<typeof analyzeProject>[0], sinc
 }
 
 function formatReport(entries: Awaited<ReturnType<typeof analyzeProject>>) {
-  const rows = [["Function", "File", "CC", "Cov%", "CRAP"], ...entries.map(entry => [
-    entry.name, `${entry.file}:${entry.line}`, String(entry.complexity),
+  const rows = [["Function", "File", "CC", "Cog", "Cov%", "CRAP"], ...entries.map(entry => [
+    entry.name, `${entry.file}:${entry.line}`, String(entry.complexity), String(entry.cognitive),
     entry.coverage === null ? "N/A" : entry.coverage.toFixed(1) + "%",
     entry.crap === null ? "N/A" : entry.crap.toFixed(1),
   ])];
@@ -77,17 +78,17 @@ function formatReport(entries: Awaited<ReturnType<typeof analyzeProject>>) {
 type Metric = Awaited<ReturnType<typeof analyzeProject>>[number];
 
 function formatComparison(entries: Awaited<ReturnType<typeof compareProject>>["entries"]) {
-  const rows = [["Function", "File", "CC base/head", "Cov% base/head", "CRAP base", "CRAP head", "Delta", "Status"],
+  const rows = [["Function", "File", "CC base/head", "Cog base/head", "Cov% base/head", "CRAP base", "CRAP head", "Delta", "Status"],
     ...entries.map(entry => [entry.name, entry.file,
-      pairedComplexity(entry.base, entry.head),
+      pairedComplexity(entry.base, entry.head, "complexity"), pairedComplexity(entry.base, entry.head, "cognitive"),
       `${sideScore(entry.base, "coverage")} / ${sideScore(entry.head, "coverage")}`,
       sideScore(entry.base, "crap"), sideScore(entry.head, "crap"), formatDelta(entry.delta.crap), entry.status,
     ])];
   return formatTable("CRAP Comparison", rows) + (entries.length === 0 ? "\nNo matching metric changes." : "");
 }
 
-function pairedComplexity(base: Metric | null, head: Metric | null) {
-  return `${base?.complexity ?? "-"} / ${head?.complexity ?? "-"}`;
+function pairedComplexity(base: Metric | null, head: Metric | null, field: "complexity" | "cognitive") {
+  return `${base?.[field] ?? "-"} / ${head?.[field] ?? "-"}`;
 }
 
 function sideScore(entry: Metric | null, field: "coverage" | "crap") {

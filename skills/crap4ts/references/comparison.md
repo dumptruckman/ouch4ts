@@ -33,13 +33,13 @@ The project directory, source roots, and test setup must be usable in both revis
 
 ## Cache and output
 
-Complete per-commit reports live at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`. The fingerprint includes the analyzer implementation, TypeScript and Node versions, platform, project directory, normalized roots, LCOV path, and setup and coverage commands. Unchanged settings reuse reports across comparisons; path filters do not invalidate them. Invalid cached data is regenerated, and writes replace cache files atomically.
+Complete per-commit reports live at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`. The fingerprint includes the analyzer and cognitive-counter implementations, TypeScript and Node versions, platform, project directory, normalized roots, LCOV path, and setup and coverage commands. Unchanged settings reuse reports across comparisons; path filters do not invalidate them. Invalid cached data, including reports without a cognitive score, is regenerated, and writes replace cache files atomically.
 
 Environment values and external services are outside the fingerprint. Use `--refresh` when those inputs change or when a test run was nondeterministic. Treat the cache as disposable local output; exclude `.metrics/cache/` from version control when tracking other metrics.
 
-The full comparison is saved as `.metrics/crap-comparison.json`, containing base and head commit hashes and comparison entries. Each entry has `name`, `file`, `status`, full `base` and `head` metrics, and a `delta` for complexity, coverage percentage points, and CRAP. Positional path filters narrow only the printed table. The normal `.metrics/crap.json` report is preserved.
+The full comparison is saved as `.metrics/crap-comparison.json`, containing base and head commit hashes and comparison entries. Each entry has `name`, `file`, `status`, full `base` and `head` metrics, and a `delta` for cyclomatic complexity, cognitive complexity, coverage percentage points, and CRAP. Positional path filters narrow only the printed table. The normal `.metrics/crap.json` report is preserved.
 
-Positive CRAP deltas indicate increased measured risk; negative deltas indicate improvement. Retain the current absolute score when explaining changes. A decrease from 100 to 90 still leaves a high score. Added and removed functions have no numeric delta. Unknown coverage keeps the affected coverage and CRAP deltas indeterminate, rather than treating them as zero.
+Positive CRAP deltas indicate increased measured risk; negative deltas indicate improvement. Retain the current absolute score when explaining changes. A decrease from 100 to 90 still leaves a high score. Added and removed functions have no numeric delta. Unknown coverage keeps the affected coverage and CRAP deltas indeterminate, rather than treating them as zero. Both complexity deltas remain available, and cognitive-only changes appear even when coverage is unknown.
 
 ## Function matching
 

@@ -2,13 +2,13 @@
 
 CRAP metrics for TypeScript, inspired by [Uncle Bob's crap4clj](https://github.com/unclebob/crap4clj). This repository pairs an agent skill with an executable analyzer.
 
-CRAP combines cyclomatic complexity with test coverage to rank functions that are risky to change.
+This analyzer uses a CRAP variant that combines cyclomatic complexity, Sonar-style cognitive complexity, and test coverage to rank functions that are risky to change.
 
 ```text
-CRAP = CC² × (1 - coverage)³ + CC
+CRAP = CC² × (1 - coverage)³ + CC + cognitive
 ```
 
-Coverage is a fraction from 0 to 1. A function with complexity 2 and 50% coverage scores 2.5. A fully covered function scores its complexity.
+Coverage is a fraction from 0 to 1. A function with cyclomatic complexity 2, cognitive complexity 1, and 50% coverage scores 3.5. A fully covered function scores the sum of its two complexities. The cognitive counter uses the existing TypeScript parser and needs no additional runtime or service.
 
 ## Setup
 
@@ -69,15 +69,15 @@ npx --no-install crap4ts --use-existing-coverage
 ```text
 CRAP Report
 ===========
-Function  File               CC   Cov%  CRAP
-price     src/orders.ts:1      2  50.0%   2.5
+Function  File             CC  Cog   Cov%  CRAP
+price     src/orders.ts:1    2    1  50.0%   3.5
 ```
 
-Normal analysis replaces `.metrics/crap.json` with `{ "entries": [...] }`. Entries contain `name`, `file`, `line`, `endLine`, `complexity`, `coverage`, and `crap`. Line numbers are 1-based. Coverage is a percentage; unknown coverage and CRAP are JSON `null` and display as `N/A`.
+Normal analysis replaces `.metrics/crap.json` with `{ "entries": [...] }`. Entries contain `name`, `file`, `line`, `endLine`, `complexity`, `cognitive`, `coverage`, and `crap`. `complexity` is cyclomatic complexity; `cognitive` is a nonnegative integer. Line numbers are 1-based. Coverage is a percentage; unknown coverage and CRAP are JSON `null` and display as `N/A`, while both complexities remain available.
 
 Entries sort by descending score, then file and line. Unknown scores come last. Path fragments filter the table, using OR matching, while the metrics file always contains all functions under the configured roots. Commit `.metrics/` in a measured project if you want to track results over time.
 
-Scores below 5 indicate low change risk. Scores from 5 to below 30 suggest focused tests or simpler control flow. Prioritize scores of 30 or more before changing those functions. These are heuristics, not a quality gate.
+Higher scores identify functions worth examining for missing tests or simpler control flow. Calibrate project limits against representative code. Classic CRAP score bands do not directly apply because this variant adds cognitive complexity.
 
 ## Changed-function reports
 
@@ -105,7 +105,7 @@ node /absolute/path/to/crap4ts/skills/crap4ts/dist/cli.js --compare origin/main 
 
 Comparison mode scores the merge base and committed `HEAD` in temporary detached worktrees. On a cache miss it runs `npm ci --ignore-scripts`, then the configured coverage command, using each revision's dependencies and source. Customize preparation with `--setup-command`. Local source edits are preserved and excluded from this mode.
 
-The report shows base and head complexity, coverage, CRAP, score delta, and added or removed functions. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. `--refresh` regenerates them. Exclude the cache directory from version control when tracking `.metrics/`.
+The report shows base and head cyclomatic complexity, cognitive complexity, coverage, CRAP, score delta, and added or removed functions. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. `--refresh` regenerates them. Exclude the cache directory from version control when tracking `.metrics/`.
 
 The result is saved to `.metrics/crap-comparison.json`; the ordinary `.metrics/crap.json` is preserved. Path filters narrow the table, while the saved comparison retains all changed metrics. See [comparison setup, cache rules, and matching conventions](skills/crap4ts/references/comparison.md).
 

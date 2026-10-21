@@ -7,7 +7,7 @@ import { readCache, writeCache } from "../src/cache.js";
 const directories: string[] = [];
 const metric = {
   name: "price", file: "src/orders.ts", line: 1, endLine: 4,
-  complexity: 2, coverage: 50, crap: 2.5,
+  complexity: 2, cognitive: 1, coverage: 50, crap: 3.5,
 };
 
 afterEach(async () => {
@@ -22,6 +22,7 @@ async function cachePath() {
 
 test.each([
   { name: "known coverage", entry: metric },
+  { name: "zero cognitive complexity", entry: { ...metric, cognitive: 0, crap: 2.5 } },
   { name: "unknown coverage", entry: { ...metric, coverage: null, crap: null } },
 ])("round-trips a commit report with $name", async ({ entry }) => {
   const path = await cachePath();
@@ -41,6 +42,9 @@ test.each([
     { name: "fractional line", entry: { ...metric, line: 1.5 } },
     { name: "reversed range", entry: { ...metric, endLine: 0 } },
     { name: "zero complexity", entry: { ...metric, complexity: 0 } },
+    { name: "missing cognitive complexity", entry: { ...metric, cognitive: undefined } },
+    { name: "negative cognitive complexity", entry: { ...metric, cognitive: -1 } },
+    { name: "fractional cognitive complexity", entry: { ...metric, cognitive: 0.5 } },
     { name: "out-of-range coverage", entry: { ...metric, coverage: 101 } },
     { name: "missing score", entry: { ...metric, crap: undefined } },
     { name: "numeric score with unknown coverage", entry: { ...metric, coverage: null } },

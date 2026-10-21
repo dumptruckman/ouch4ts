@@ -1,13 +1,14 @@
 {
   "entries": [
     {
-      "name": "cachedEntries",
-      "file": "src/cache.ts",
-      "line": 20,
-      "endLine": 24,
-      "complexity": 6,
+      "name": "nestedChildren",
+      "file": "src/cognitive.ts",
+      "line": 40,
+      "endLine": 52,
+      "complexity": 8,
+      "cognitive": 8,
       "coverage": 100,
-      "crap": 6
+      "crap": 16
     },
     {
       "name": "changedRanges",
@@ -15,35 +16,19 @@
       "line": 18,
       "endLine": 30,
       "complexity": 6,
+      "cognitive": 6,
       "coverage": 100,
-      "crap": 6
+      "crap": 12
     },
     {
-      "name": "<anonymous@4:52>",
-      "file": "src/cli.ts",
-      "line": 4,
-      "endLine": 7,
-      "complexity": 2,
-      "coverage": 0,
-      "crap": 6
-    },
-    {
-      "name": "validateReportMode",
-      "file": "src/command.ts",
-      "line": 120,
-      "endLine": 125,
-      "complexity": 6,
+      "name": "logicalIncrement",
+      "file": "src/cognitive.ts",
+      "line": 62,
+      "endLine": 74,
+      "complexity": 7,
+      "cognitive": 5,
       "coverage": 100,
-      "crap": 6
-    },
-    {
-      "name": "compareChanges",
-      "file": "src/comparison.ts",
-      "line": 188,
-      "endLine": 191,
-      "complexity": 6,
-      "coverage": 100,
-      "crap": 6
+      "crap": 12
     },
     {
       "name": "discoverSources",
@@ -51,53 +36,29 @@
       "line": 14,
       "endLine": 22,
       "complexity": 6,
+      "cognitive": 6,
       "coverage": 100,
-      "crap": 6
+      "crap": 12
     },
     {
-      "name": "analyze.<anonymous@13:26>.visit",
-      "file": "src/index.ts",
-      "line": 24,
-      "endLine": 33,
+      "name": "hasUniformLogicalOperator",
+      "file": "src/cognitive.ts",
+      "line": 88,
+      "endLine": 94,
       "complexity": 6,
+      "cognitive": 4,
       "coverage": 100,
-      "crap": 6
+      "crap": 10
     },
     {
-      "name": "recordLineCoverage",
-      "file": "src/index.ts",
-      "line": 164,
-      "endLine": 170,
-      "complexity": 6,
-      "coverage": 100,
-      "crap": 6
-    },
-    {
-      "name": "comparisonPaths.projectPath",
-      "file": "src/comparison.ts",
-      "line": 32,
-      "endLine": 39,
-      "complexity": 5,
-      "coverage": 80,
-      "crap": 5.2
-    },
-    {
-      "name": "isMetric",
-      "file": "src/cache.ts",
-      "line": 37,
-      "endLine": 40,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "pairedComplexity",
+      "name": "validateReportMode",
       "file": "src/command.ts",
-      "line": 89,
-      "endLine": 91,
-      "complexity": 5,
+      "line": 121,
+      "endLine": 126,
+      "complexity": 6,
+      "cognitive": 4,
       "coverage": 100,
-      "crap": 5
+      "crap": 10
     },
     {
       "name": "renamedFiles",
@@ -105,80 +66,29 @@
       "line": 87,
       "endLine": 100,
       "complexity": 5,
+      "cognitive": 5,
       "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "sameScores",
-      "file": "src/comparison.ts",
-      "line": 148,
-      "endLine": 151,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "currentOrPreviousRisk",
-      "file": "src/comparison.ts",
-      "line": 193,
-      "endLine": 195,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "analyze.<anonymous@36:11>",
-      "file": "src/index.ts",
-      "line": 36,
-      "endLine": 36,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "functionName",
-      "file": "src/index.ts",
-      "line": 60,
-      "endLine": 68,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "scoreFunction",
-      "file": "src/index.ts",
-      "line": 77,
-      "endLine": 103,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "isDecision",
-      "file": "src/index.ts",
-      "line": 117,
-      "endLine": 120,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
-    },
-    {
-      "name": "bodyRange",
-      "file": "src/index.ts",
-      "line": 131,
-      "endLine": 137,
-      "complexity": 5,
-      "coverage": 100,
-      "crap": 5
+      "crap": 10
     },
     {
       "name": "readLcov",
       "file": "src/index.ts",
-      "line": 139,
-      "endLine": 153,
+      "line": 141,
+      "endLine": 155,
       "complexity": 5,
+      "cognitive": 5,
       "coverage": 100,
-      "crap": 5
+      "crap": 10
+    },
+    {
+      "name": "functionName",
+      "file": "src/index.ts",
+      "line": 61,
+      "endLine": 69,
+      "complexity": 5,
+      "cognitive": 4,
+      "coverage": 100,
+      "crap": 9
     },
     {
       "name": "analyzeProject",
@@ -186,8 +96,9 @@
       "line": 15,
       "endLine": 28,
       "complexity": 5,
+      "cognitive": 4,
       "coverage": 100,
-      "crap": 5
+      "crap": 9
     },
     {
       "name": "canonicalPath",
@@ -195,53 +106,29 @@
       "line": 35,
       "endLine": 44,
       "complexity": 4,
+      "cognitive": 4,
       "coverage": 80,
-      "crap": 4.128
+      "crap": 8.128
     },
     {
-      "name": "readCache",
+      "name": "cachedEntries",
       "file": "src/cache.ts",
-      "line": 9,
-      "endLine": 18,
-      "complexity": 4,
+      "line": 20,
+      "endLine": 24,
+      "complexity": 6,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 4
+      "crap": 8
     },
     {
-      "name": "hasRiskScores",
-      "file": "src/cache.ts",
-      "line": 58,
-      "endLine": 61,
-      "complexity": 4,
+      "name": "controlFlowIncrement",
+      "file": "src/cognitive.ts",
+      "line": 21,
+      "endLine": 26,
+      "complexity": 5,
+      "cognitive": 3,
       "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "addHunk",
-      "file": "src/changes.ts",
-      "line": 37,
-      "endLine": 43,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "overlapsFunction",
-      "file": "src/changes.ts",
-      "line": 45,
-      "endLine": 50,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "runCli",
-      "file": "src/command.ts",
-      "line": 23,
-      "endLine": 56,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
+      "crap": 8
     },
     {
       "name": "snapshot",
@@ -249,17 +136,99 @@
       "line": 60,
       "endLine": 85,
       "complexity": 4,
+      "cognitive": 4,
       "coverage": 100,
-      "crap": 4
+      "crap": 8
     },
     {
-      "name": "compareEntries.add",
-      "file": "src/comparison.ts",
-      "line": 118,
-      "endLine": 127,
-      "complexity": 4,
+      "name": "analyze.<anonymous@14:26>.visit",
+      "file": "src/index.ts",
+      "line": 25,
+      "endLine": 34,
+      "complexity": 6,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 4
+      "crap": 8
+    },
+    {
+      "name": "scoreFunction",
+      "file": "src/index.ts",
+      "line": 78,
+      "endLine": 105,
+      "complexity": 5,
+      "cognitive": 3,
+      "coverage": 100,
+      "crap": 8
+    },
+    {
+      "name": "scoreFunction.count",
+      "file": "src/index.ts",
+      "line": 85,
+      "endLine": 93,
+      "complexity": 4,
+      "cognitive": 4,
+      "coverage": 100,
+      "crap": 8
+    },
+    {
+      "name": "bodyRange",
+      "file": "src/index.ts",
+      "line": 133,
+      "endLine": 139,
+      "complexity": 5,
+      "cognitive": 3,
+      "coverage": 100,
+      "crap": 8
+    },
+    {
+      "name": "readCache",
+      "file": "src/cache.ts",
+      "line": 9,
+      "endLine": 18,
+      "complexity": 4,
+      "cognitive": 3,
+      "coverage": 100,
+      "crap": 7
+    },
+    {
+      "name": "isMetric",
+      "file": "src/cache.ts",
+      "line": 37,
+      "endLine": 40,
+      "complexity": 6,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 7
+    },
+    {
+      "name": "overlapsFunction",
+      "file": "src/changes.ts",
+      "line": 45,
+      "endLine": 50,
+      "complexity": 4,
+      "cognitive": 3,
+      "coverage": 100,
+      "crap": 7
+    },
+    {
+      "name": "<anonymous@4:52>",
+      "file": "src/cli.ts",
+      "line": 4,
+      "endLine": 7,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 0,
+      "crap": 7
+    },
+    {
+      "name": "conditionIncrement",
+      "file": "src/cognitive.ts",
+      "line": 28,
+      "endLine": 33,
+      "complexity": 4,
+      "cognitive": 3,
+      "coverage": 100,
+      "crap": 7
     },
     {
       "name": "compareGroup",
@@ -267,35 +236,19 @@
       "line": 133,
       "endLine": 137,
       "complexity": 4,
+      "cognitive": 3,
       "coverage": 100,
-      "crap": 4
+      "crap": 7
     },
     {
-      "name": "unchangedGroup",
+      "name": "sameScores",
       "file": "src/comparison.ts",
-      "line": 139,
-      "endLine": 141,
-      "complexity": 4,
+      "line": 148,
+      "endLine": 151,
+      "complexity": 6,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "comparisonEntry",
-      "file": "src/comparison.ts",
-      "line": 153,
-      "endLine": 161,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "unchangedEntry",
-      "file": "src/comparison.ts",
-      "line": 163,
-      "endLine": 165,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
+      "crap": 7
     },
     {
       "name": "comparisonStatus",
@@ -303,71 +256,29 @@
       "line": 167,
       "endLine": 171,
       "complexity": 4,
+      "cognitive": 3,
       "coverage": 100,
-      "crap": 4
+      "crap": 7
     },
     {
-      "name": "git",
-      "file": "src/git.ts",
-      "line": 3,
-      "endLine": 8,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "assignedFunctionName",
+      "name": "recordLineCoverage",
       "file": "src/index.ts",
-      "line": 70,
-      "endLine": 75,
-      "complexity": 4,
+      "line": 166,
+      "endLine": 172,
+      "complexity": 6,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 4
+      "crap": 7
     },
     {
-      "name": "scoreFunction.count",
-      "file": "src/index.ts",
-      "line": 84,
-      "endLine": 92,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "scoreFunction.<anonymous@94:48>",
-      "file": "src/index.ts",
-      "line": 94,
-      "endLine": 95,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "isOptionalChainStep",
-      "file": "src/index.ts",
-      "line": 126,
-      "endLine": 129,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "sourceCoverage",
-      "file": "src/index.ts",
-      "line": 155,
-      "endLine": 162,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
-    },
-    {
-      "name": "runCommand",
-      "file": "src/project.ts",
-      "line": 30,
-      "endLine": 34,
-      "complexity": 4,
-      "coverage": 100,
-      "crap": 4
+      "name": "comparisonPaths.projectPath",
+      "file": "src/comparison.ts",
+      "line": 32,
+      "endLine": 39,
+      "complexity": 5,
+      "cognitive": 1,
+      "coverage": 80,
+      "crap": 6.2
     },
     {
       "name": "reportStamp",
@@ -375,80 +286,179 @@
       "line": 4,
       "endLine": 12,
       "complexity": 3,
+      "cognitive": 3,
       "coverage": 80,
-      "crap": 3.072
+      "crap": 6.072
     },
     {
-      "name": "hasFunctionRange",
+      "name": "hasRiskScores",
       "file": "src/cache.ts",
-      "line": 50,
-      "endLine": 52,
-      "complexity": 3,
+      "line": 58,
+      "endLine": 61,
+      "complexity": 4,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
+      "crap": 6
     },
     {
-      "name": "isPositiveInteger",
-      "file": "src/cache.ts",
-      "line": 54,
-      "endLine": 56,
-      "complexity": 3,
+      "name": "runCli",
+      "file": "src/command.ts",
+      "line": 23,
+      "endLine": 57,
+      "complexity": 4,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
+      "crap": 6
     },
     {
-      "name": "isCoverage",
-      "file": "src/cache.ts",
-      "line": 63,
-      "endLine": 65,
-      "complexity": 3,
+      "name": "compareEntries.add",
+      "file": "src/comparison.ts",
+      "line": 118,
+      "endLine": 127,
+      "complexity": 4,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
+      "crap": 6
+    },
+    {
+      "name": "comparisonEntry",
+      "file": "src/comparison.ts",
+      "line": 153,
+      "endLine": 161,
+      "complexity": 4,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 6
+    },
+    {
+      "name": "compareChanges",
+      "file": "src/comparison.ts",
+      "line": 189,
+      "endLine": 192,
+      "complexity": 6,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 6
+    },
+    {
+      "name": "git",
+      "file": "src/git.ts",
+      "line": 3,
+      "endLine": 8,
+      "complexity": 4,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 6
+    },
+    {
+      "name": "isDecision",
+      "file": "src/index.ts",
+      "line": 119,
+      "endLine": 122,
+      "complexity": 5,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 6
+    },
+    {
+      "name": "runCommand",
+      "file": "src/project.ts",
+      "line": 30,
+      "endLine": 34,
+      "complexity": 4,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 6
+    },
+    {
+      "name": "addHunk",
+      "file": "src/changes.ts",
+      "line": 37,
+      "endLine": 43,
+      "complexity": 4,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "cognitiveComplexity",
+      "file": "src/cognitive.ts",
+      "line": 4,
+      "endLine": 19,
+      "complexity": 3,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "logicalSequence",
+      "file": "src/cognitive.ts",
+      "line": 76,
+      "endLine": 80,
+      "complexity": 3,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "isJsxShortCircuit",
+      "file": "src/cognitive.ts",
+      "line": 82,
+      "endLine": 86,
+      "complexity": 3,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 5
     },
     {
       "name": "reportCurrent",
       "file": "src/command.ts",
-      "line": 58,
-      "endLine": 66,
+      "line": 59,
+      "endLine": 67,
       "complexity": 3,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
+      "crap": 5
     },
     {
-      "name": "formatReport.<anonymous@69:76>",
+      "name": "formatReport.<anonymous@70:83>",
       "file": "src/command.ts",
-      "line": 69,
-      "endLine": 73,
+      "line": 70,
+      "endLine": 74,
       "complexity": 3,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
+      "crap": 5
+    },
+    {
+      "name": "pairedComplexity",
+      "file": "src/command.ts",
+      "line": 90,
+      "endLine": 92,
+      "complexity": 5,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 5
     },
     {
       "name": "sideScore",
       "file": "src/command.ts",
-      "line": 93,
-      "endLine": 97,
+      "line": 94,
+      "endLine": 98,
       "complexity": 3,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
+      "crap": 5
     },
     {
       "name": "formatDelta",
       "file": "src/command.ts",
-      "line": 99,
-      "endLine": 102,
+      "line": 100,
+      "endLine": 103,
       "complexity": 3,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
-    },
-    {
-      "name": "projectOptions",
-      "file": "src/command.ts",
-      "line": 127,
-      "endLine": 132,
-      "complexity": 3,
-      "coverage": 100,
-      "crap": 3
+      "crap": 5
     },
     {
       "name": "recordRename",
@@ -456,26 +466,169 @@
       "line": 106,
       "endLine": 112,
       "complexity": 3,
+      "cognitive": 2,
       "coverage": 100,
-      "crap": 3
+      "crap": 5
+    },
+    {
+      "name": "unchangedGroup",
+      "file": "src/comparison.ts",
+      "line": 139,
+      "endLine": 141,
+      "complexity": 4,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "unchangedEntry",
+      "file": "src/comparison.ts",
+      "line": 163,
+      "endLine": 165,
+      "complexity": 4,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "currentOrPreviousRisk",
+      "file": "src/comparison.ts",
+      "line": 194,
+      "endLine": 196,
+      "complexity": 5,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "analyze.<anonymous@37:11>",
+      "file": "src/index.ts",
+      "line": 37,
+      "endLine": 37,
+      "complexity": 5,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "accessorPrefix",
+      "file": "src/index.ts",
+      "line": 55,
+      "endLine": 59,
+      "complexity": 3,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "assignedFunctionName",
+      "file": "src/index.ts",
+      "line": 71,
+      "endLine": 76,
+      "complexity": 4,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "scoreFunction.<anonymous@95:48>",
+      "file": "src/index.ts",
+      "line": 95,
+      "endLine": 96,
+      "complexity": 4,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "isOptionalChainStep",
+      "file": "src/index.ts",
+      "line": 128,
+      "endLine": 131,
+      "complexity": 4,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "sourceCoverage",
+      "file": "src/index.ts",
+      "line": 157,
+      "endLine": 164,
+      "complexity": 4,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "validateLcovComplete",
+      "file": "src/index.ts",
+      "line": 178,
+      "endLine": 181,
+      "complexity": 3,
+      "cognitive": 2,
+      "coverage": 100,
+      "crap": 5
+    },
+    {
+      "name": "hasFunctionRange",
+      "file": "src/cache.ts",
+      "line": 50,
+      "endLine": 52,
+      "complexity": 3,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 4
+    },
+    {
+      "name": "isIntegerAtLeast",
+      "file": "src/cache.ts",
+      "line": 54,
+      "endLine": 56,
+      "complexity": 3,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 4
+    },
+    {
+      "name": "isCoverage",
+      "file": "src/cache.ts",
+      "line": 63,
+      "endLine": 65,
+      "complexity": 3,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 4
+    },
+    {
+      "name": "isNestingStructure",
+      "file": "src/cognitive.ts",
+      "line": 35,
+      "endLine": 38,
+      "complexity": 4,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 4
     },
     {
       "name": "metricDeltas",
       "file": "src/comparison.ts",
       "line": 173,
-      "endLine": 180,
+      "endLine": 181,
       "complexity": 3,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 3
+      "crap": 4
     },
     {
       "name": "scoreDelta",
       "file": "src/comparison.ts",
-      "line": 182,
-      "endLine": 184,
+      "line": 183,
+      "endLine": 185,
       "complexity": 3,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 3
+      "crap": 4
     },
     {
       "name": "isMissingFile",
@@ -483,53 +636,39 @@
       "line": 30,
       "endLine": 32,
       "complexity": 3,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 3
+      "crap": 4
     },
     {
       "name": "isRuntimeFunction",
       "file": "src/index.ts",
-      "line": 44,
-      "endLine": 46,
+      "line": 45,
+      "endLine": 47,
       "complexity": 3,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 3
-    },
-    {
-      "name": "accessorPrefix",
-      "file": "src/index.ts",
-      "line": 54,
-      "endLine": 58,
-      "complexity": 3,
-      "coverage": 100,
-      "crap": 3
+      "crap": 4
     },
     {
       "name": "hasDefaultValue",
       "file": "src/index.ts",
-      "line": 122,
-      "endLine": 124,
+      "line": 124,
+      "endLine": 126,
       "complexity": 3,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 3
+      "crap": 4
     },
     {
       "name": "isSafeCount",
       "file": "src/index.ts",
-      "line": 172,
-      "endLine": 174,
+      "line": 174,
+      "endLine": 176,
       "complexity": 3,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 3
-    },
-    {
-      "name": "validateLcovComplete",
-      "file": "src/index.ts",
-      "line": 176,
-      "endLine": 179,
-      "complexity": 3,
-      "coverage": 100,
-      "crap": 3
+      "crap": 4
     },
     {
       "name": "isRecord",
@@ -537,8 +676,9 @@
       "line": 42,
       "endLine": 44,
       "complexity": 2,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 2
+      "crap": 3
     },
     {
       "name": "hasFunctionIdentity",
@@ -546,8 +686,9 @@
       "line": 46,
       "endLine": 48,
       "complexity": 2,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 2
+      "crap": 3
     },
     {
       "name": "isNumber",
@@ -555,8 +696,169 @@
       "line": 67,
       "endLine": 69,
       "complexity": 2,
+      "cognitive": 1,
       "coverage": 100,
-      "crap": 2
+      "crap": 3
+    },
+    {
+      "name": "currentFilePath",
+      "file": "src/changes.ts",
+      "line": 32,
+      "endLine": 35,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "decodeGitPath",
+      "file": "src/changes.ts",
+      "line": 53,
+      "endLine": 60,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "cognitiveComplexity.visit",
+      "file": "src/cognitive.ts",
+      "line": 7,
+      "endLine": 15,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "isLogicalExpression",
+      "file": "src/cognitive.ts",
+      "line": 58,
+      "endLine": 60,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "reportCurrent.<anonymous@63:34>",
+      "file": "src/command.ts",
+      "line": 63,
+      "endLine": 63,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "formatComparison",
+      "file": "src/command.ts",
+      "line": 80,
+      "endLine": 88,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "formatTable.<anonymous@110:30>.<anonymous@111:29>",
+      "file": "src/command.ts",
+      "line": 111,
+      "endLine": 112,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "projectOptions",
+      "file": "src/command.ts",
+      "line": 128,
+      "endLine": 133,
+      "complexity": 3,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "matchesPath",
+      "file": "src/command.ts",
+      "line": 135,
+      "endLine": 138,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "compareProject",
+      "file": "src/comparison.ts",
+      "line": 16,
+      "endLine": 29,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "settingsFingerprint",
+      "file": "src/comparison.ts",
+      "line": 46,
+      "endLine": 58,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "isSourceFile",
+      "file": "src/files.ts",
+      "line": 26,
+      "endLine": 28,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "analyze.<anonymous@14:26>",
+      "file": "src/index.ts",
+      "line": 14,
+      "endLine": 37,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "analyze.<anonymous@14:26>.getSourceFile",
+      "file": "src/index.ts",
+      "line": 19,
+      "endLine": 19,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "analyze.<anonymous@14:26>.visit.<anonymous@33:29>",
+      "file": "src/index.ts",
+      "line": 33,
+      "endLine": 33,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
+    },
+    {
+      "name": "scoreFunction.<anonymous@95:48>.<anonymous@96:24>",
+      "file": "src/index.ts",
+      "line": 96,
+      "endLine": 96,
+      "complexity": 2,
+      "cognitive": 1,
+      "coverage": 100,
+      "crap": 3
     },
     {
       "name": "changedFunctionFilter",
@@ -564,6 +866,7 @@
       "line": 6,
       "endLine": 16,
       "complexity": 2,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 2
     },
@@ -573,24 +876,7 @@
       "line": 14,
       "endLine": 15,
       "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "currentFilePath",
-      "file": "src/changes.ts",
-      "line": 32,
-      "endLine": 35,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "decodeGitPath",
-      "file": "src/changes.ts",
-      "line": 53,
-      "endLine": 60,
-      "complexity": 2,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 2
     },
@@ -600,60 +886,7 @@
       "line": 59,
       "endLine": 59,
       "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "reportCurrent.<anonymous@62:34>",
-      "file": "src/command.ts",
-      "line": 62,
-      "endLine": 62,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "formatComparison",
-      "file": "src/command.ts",
-      "line": 79,
-      "endLine": 87,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "formatTable.<anonymous@109:30>.<anonymous@110:29>",
-      "file": "src/command.ts",
-      "line": 110,
-      "endLine": 111,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "matchesPath",
-      "file": "src/command.ts",
-      "line": 134,
-      "endLine": 137,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "compareProject",
-      "file": "src/comparison.ts",
-      "line": 16,
-      "endLine": 29,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "settingsFingerprint",
-      "file": "src/comparison.ts",
-      "line": 46,
-      "endLine": 58,
-      "complexity": 2,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 2
     },
@@ -663,60 +896,17 @@
       "line": 102,
       "endLine": 104,
       "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "isSourceFile",
-      "file": "src/files.ts",
-      "line": 26,
-      "endLine": 28,
-      "complexity": 2,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 2
     },
     {
       "name": "analyze",
       "file": "src/index.ts",
-      "line": 11,
-      "endLine": 37,
+      "line": 12,
+      "endLine": 38,
       "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "analyze.<anonymous@13:26>",
-      "file": "src/index.ts",
-      "line": 13,
-      "endLine": 36,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "analyze.<anonymous@13:26>.getSourceFile",
-      "file": "src/index.ts",
-      "line": 18,
-      "endLine": 18,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "analyze.<anonymous@13:26>.visit.<anonymous@32:29>",
-      "file": "src/index.ts",
-      "line": 32,
-      "endLine": 32,
-      "complexity": 2,
-      "coverage": 100,
-      "crap": 2
-    },
-    {
-      "name": "scoreFunction.<anonymous@94:48>.<anonymous@95:24>",
-      "file": "src/index.ts",
-      "line": 95,
-      "endLine": 95,
-      "complexity": 2,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 2
     },
@@ -726,6 +916,7 @@
       "line": 26,
       "endLine": 35,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -735,6 +926,17 @@
       "line": 15,
       "endLine": 15,
       "complexity": 1,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 1
+    },
+    {
+      "name": "cognitiveComplexity.visit.<anonymous@12:28>",
+      "file": "src/cognitive.ts",
+      "line": 12,
+      "endLine": 14,
+      "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -744,105 +946,117 @@
       "line": 8,
       "endLine": 20,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "runCli.<anonymous@51:56>",
+      "name": "runCli.<anonymous@52:56>",
       "file": "src/command.ts",
-      "line": 51,
-      "endLine": 52,
+      "line": 52,
+      "endLine": 53,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "reportCurrent.<anonymous@59:43>",
+      "name": "reportCurrent.<anonymous@60:43>",
       "file": "src/command.ts",
-      "line": 59,
-      "endLine": 59,
+      "line": 60,
+      "endLine": 60,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "reportCurrent.<anonymous@64:34>",
+      "name": "reportCurrent.<anonymous@65:34>",
       "file": "src/command.ts",
-      "line": 64,
-      "endLine": 64,
+      "line": 65,
+      "endLine": 65,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
       "name": "formatReport",
       "file": "src/command.ts",
-      "line": 68,
-      "endLine": 75,
+      "line": 69,
+      "endLine": 76,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "formatComparison.<anonymous@81:20>",
+      "name": "formatComparison.<anonymous@82:20>",
       "file": "src/command.ts",
-      "line": 81,
-      "endLine": 85,
+      "line": 82,
+      "endLine": 86,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
       "name": "formatTable",
       "file": "src/command.ts",
-      "line": 104,
-      "endLine": 116,
-      "complexity": 1,
-      "coverage": 100,
-      "crap": 1
-    },
-    {
-      "name": "formatTable.<anonymous@105:31>",
-      "file": "src/command.ts",
       "line": 105,
-      "endLine": 108,
+      "endLine": 117,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "formatTable.<anonymous@105:31>.<anonymous@106:30>",
+      "name": "formatTable.<anonymous@106:31>",
       "file": "src/command.ts",
       "line": 106,
-      "endLine": 106,
+      "endLine": 109,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "formatTable.<anonymous@109:30>",
+      "name": "formatTable.<anonymous@106:31>.<anonymous@107:30>",
       "file": "src/command.ts",
-      "line": 109,
-      "endLine": 114,
+      "line": 107,
+      "endLine": 107,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "matchesPath.<anonymous@136:23>",
+      "name": "formatTable.<anonymous@110:30>",
       "file": "src/command.ts",
-      "line": 136,
-      "endLine": 136,
+      "line": 110,
+      "endLine": 115,
       "complexity": 1,
+      "cognitive": 0,
+      "coverage": 100,
+      "crap": 1
+    },
+    {
+      "name": "matchesPath.<anonymous@137:23>",
+      "file": "src/command.ts",
+      "line": 137,
+      "endLine": 137,
+      "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
       "name": "writeReport",
       "file": "src/command.ts",
-      "line": 139,
-      "endLine": 142,
+      "line": 140,
+      "endLine": 143,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -852,6 +1066,7 @@
       "line": 31,
       "endLine": 44,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -861,6 +1076,7 @@
       "line": 116,
       "endLine": 131,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -870,6 +1086,7 @@
       "line": 128,
       "endLine": 128,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -879,6 +1096,7 @@
       "line": 129,
       "endLine": 129,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -888,6 +1106,7 @@
       "line": 130,
       "endLine": 130,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -897,6 +1116,7 @@
       "line": 136,
       "endLine": 136,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -906,6 +1126,7 @@
       "line": 136,
       "endLine": 136,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -915,6 +1136,7 @@
       "line": 143,
       "endLine": 146,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -924,24 +1146,27 @@
       "line": 144,
       "endLine": 144,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "analyze.<anonymous@13:26>.visit.<anonymous@28:31>",
+      "name": "analyze.<anonymous@14:26>.visit.<anonymous@29:31>",
       "file": "src/index.ts",
-      "line": 28,
-      "endLine": 28,
+      "line": 29,
+      "endLine": 29,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
     {
-      "name": "scoreFunction.<anonymous@97:25>",
+      "name": "scoreFunction.<anonymous@98:25>",
       "file": "src/index.ts",
-      "line": 97,
-      "endLine": 97,
+      "line": 98,
+      "endLine": 98,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -951,6 +1176,7 @@
       "line": 17,
       "endLine": 17,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     },
@@ -960,6 +1186,7 @@
       "line": 26,
       "endLine": 26,
       "complexity": 1,
+      "cognitive": 0,
       "coverage": 100,
       "crap": 1
     }

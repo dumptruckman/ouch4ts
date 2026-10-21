@@ -1,5 +1,6 @@
 import { relative, resolve, sep } from "node:path";
 import ts from "typescript";
+import { cognitiveComplexity } from "./cognitive.js";
 
 export interface AnalysisOptions {
   sources: readonly { path: string; text: string }[];
@@ -95,10 +96,11 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
     !nestedRanges.some(([start, end]) => number >= start && number <= end));
   const fraction = executable.length === 0 ? null
     : executable.filter(([, hits]) => hits > 0).length / executable.length;
+  const cognitive = cognitiveComplexity(node);
   return {
-    name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity,
+    name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity, cognitive,
     coverage: fraction === null ? null : fraction * 100,
-    crap: fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity,
+    crap: fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity + cognitive,
   };
 }
 

@@ -25,7 +25,7 @@ test("help works without source files or a coverage setup", async () => {
 });
 
 test.each([
-  { args: ["--use-existing-coverage"], status: 0, stdout: /price\s+src\/orders.ts:1\s+1\s+100.0%\s+1.0/, stderr: /^$/ },
+  { args: ["--use-existing-coverage"], status: 0, stdout: /price\s+src\/orders.ts:1\s+1\s+0\s+100\.0%\s+1\.0/, stderr: /^$/ },
   { args: ["--unknown"], status: 1, stdout: /^$/, stderr: /crap4ts:.*Unknown option/ },
 ])("executable reports results and exit codes for $args", ({ args, status, stdout, stderr }) => {
   const cwd = project({
@@ -199,13 +199,13 @@ test("compare scores committed base and head in isolated checkouts and reports m
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
   expect(report).toMatchObject({ base, head, entries: expect.arrayContaining([
     { name: "price", file: "src/orders.ts", status: "changed",
-      base: expect.objectContaining({ complexity: 2, coverage: 50, crap: 2.5 }),
-      head: expect.objectContaining({ complexity: 2, coverage: 100, crap: 2 }),
-      delta: { complexity: 0, coverage: 50, crap: -0.5 } },
+      base: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 50, crap: 3.5 }),
+      head: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 100, crap: 3 }),
+      delta: { complexity: 0, cognitive: 0, coverage: 50, crap: -0.5 } },
     { name: "added", file: "src/orders.ts", status: "added", base: null,
-      head: expect.objectContaining({ crap: 1 }), delta: { complexity: null, coverage: null, crap: null } },
+      head: expect.objectContaining({ crap: 1 }), delta: { complexity: null, cognitive: null, coverage: null, crap: null } },
     { name: "removed", file: "src/orders.ts", status: "removed", head: null,
-      base: expect.objectContaining({ crap: 2 }), delta: { complexity: null, coverage: null, crap: null } },
+      base: expect.objectContaining({ crap: 2 }), delta: { complexity: null, cognitive: null, coverage: null, crap: null } },
   ]) });
   expect(report.entries).toHaveLength(3);
   expect(result.stdout).toContain("price");
@@ -240,6 +240,24 @@ test("compare reuses commit reports until refresh is requested", async () => {
   const refreshed = await runComparison(cwd, "--refresh");
   expect(refreshed.status, refreshed.stderr).toBe(0);
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
+});
+
+test("comparison reports cognitive changes even when coverage and CRAP are unknown", async () => {
+  const cwd = comparisonProject({
+    "src/logic.ts": "export function logic() { if (a) {} if (b) {} }\n",
+  });
+  writeFileSync(join(cwd, "src/logic.ts"), "export function logic() { if (a) { if (b) {} } }\n");
+  commit(cwd, "Nest the conditions");
+  const result = await runComparison(cwd);
+  expect(result.status, result.stderr).toBe(0);
+  const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
+  expect(report.entries).toContainEqual({
+    name: "logic", file: "src/logic.ts", status: "changed",
+    base: expect.objectContaining({ complexity: 3, cognitive: 2, coverage: null, crap: null }),
+    head: expect.objectContaining({ complexity: 3, cognitive: 3, coverage: null, crap: null }),
+    delta: { complexity: 0, cognitive: 1, coverage: null, crap: null },
+  });
+  expect(result.stdout).toContain("Cog base/head");
 });
 
 test("comparison cache separates coverage settings and regenerates a damaged commit report", async () => {
@@ -299,12 +317,12 @@ test("comparison matches renamed files and a unique callback after line numbers 
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
   expect(report.entries).toEqual(expect.arrayContaining([
     expect.objectContaining({ name: "price", file: "src/purchases.ts", status: "changed",
-      base: expect.objectContaining({ file: "src/orders.ts" }), delta: { complexity: 0, coverage: 50, crap: -0.5 } }),
-    expect.objectContaining({ name: "stable", status: "renamed", delta: { complexity: 0, coverage: 0, crap: 0 } }),
+      base: expect.objectContaining({ file: "src/orders.ts" }), delta: { complexity: 0, cognitive: 0, coverage: 50, crap: -0.5 } }),
+    expect.objectContaining({ name: "stable", status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, crap: 0 } }),
   ]));
   const callbacks = report.entries.filter((entry: { name: string }) => entry.name.startsWith("callbacks.<anonymous@"));
   expect(callbacks).toHaveLength(1);
-  expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, coverage: 0, crap: 0 } });
+  expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, crap: 0 } });
 });
 
 test("comparison preserves unknown coverage without inventing a numeric score delta", async () => {
@@ -315,19 +333,19 @@ test("comparison preserves unknown coverage without inventing a numeric score de
   expect(result.status, result.stderr).toBe(0);
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8"));
   expect(report.entries).toContainEqual(expect.objectContaining({ name: "price", status: "changed",
-    base: expect.objectContaining({ crap: 2.5 }), head: expect.objectContaining({ coverage: null, crap: null }),
-    delta: { complexity: 0, coverage: null, crap: null },
+    base: expect.objectContaining({ crap: 3.5 }), head: expect.objectContaining({ coverage: null, crap: null }),
+    delta: { complexity: 0, cognitive: 0, coverage: null, crap: null },
   }));
 });
 
 test("comparison keeps ambiguous matches explicit without reporting unchanged groups", async () => {
-  const before = "export const one = { run() { return 1; } };\nexport const two = { run() { return 2; } };\n";
+  const before = "export const one = { run() { if (a) {} if (b) {} return 1; } };\nexport const two = { run() { return 2; } };\n";
   const cwd = comparisonProject({ "src/duplicates.ts": before });
   const unchanged = await runComparison(cwd);
   expect(unchanged.status, unchanged.stderr).toBe(0);
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap-comparison.json"), "utf8")).entries
     .some((entry: { name: string }) => entry.name === "run")).toBe(false);
-  writeFileSync(join(cwd, "src/duplicates.ts"), before.replace("return 1;", "if (true) return 1; return 0;"));
+  writeFileSync(join(cwd, "src/duplicates.ts"), before.replace("if (a) {} if (b) {}", "if (a) { if (b) {} }"));
   git(cwd, "add", "src/duplicates.ts");
   git(cwd, "commit", "-qm", "Change one ambiguous function");
   const changed = await runComparison(cwd);
@@ -387,10 +405,10 @@ test("since reports changed functions with full scores and preserves complete me
 
   const result = await run(cwd, "--since", "base", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toMatch(/changed\s+src\/orders.ts:1\s+2\s+50.0%\s+2.5/);
+  expect(result.stdout).toMatch(/changed\s+src\/orders.ts:1\s+2\s+1\s+50\.0%\s+3\.5/);
   expect(result.stdout).not.toContain("untouched");
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toMatchObject({ entries: [
-    { name: "changed", crap: 2.5 }, { name: "untouched", crap: 1 },
+    { name: "changed", crap: 3.5 }, { name: "untouched", crap: 1 },
   ] });
 });
 
@@ -541,8 +559,8 @@ test("prints function risk and saves a machine-readable metrics report", async (
   });
   const result = await run(cwd, "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toMatch(/price\s+src\/orders.ts:1\s+2\s+50.0%\s+2.5/);
+  expect(result.stdout).toMatch(/price\s+src\/orders.ts:1\s+2\s+1\s+50\.0%\s+3\.5/);
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/crap.json"), "utf8"))).toEqual({ entries: [{
-    name: "price", file: "src/orders.ts", line: 1, endLine: 4, complexity: 2, coverage: 50, crap: 2.5,
+    name: "price", file: "src/orders.ts", line: 1, endLine: 4, complexity: 2, cognitive: 1, coverage: 50, crap: 3.5,
   }] });
 });

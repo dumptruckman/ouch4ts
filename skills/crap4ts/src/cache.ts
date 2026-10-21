@@ -36,7 +36,7 @@ export async function writeCache(path: string, commit: string, settingsKey: stri
 
 function isMetric(value: unknown): value is Metric {
   return isRecord(value) && hasFunctionIdentity(value) && hasFunctionRange(value) &&
-    isPositiveInteger(value.complexity) && hasRiskScores(value);
+    isIntegerAtLeast(value.complexity, 1) && isIntegerAtLeast(value.cognitive, 0) && hasRiskScores(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,11 +48,11 @@ function hasFunctionIdentity(value: Record<string, unknown>) {
 }
 
 function hasFunctionRange(value: Record<string, unknown>) {
-  return isPositiveInteger(value.line) && isPositiveInteger(value.endLine) && value.endLine >= value.line;
+  return isIntegerAtLeast(value.line, 1) && isIntegerAtLeast(value.endLine, 1) && value.endLine >= value.line;
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return isNumber(value) && Number.isInteger(value) && value >= 1;
+function isIntegerAtLeast(value: unknown, minimum: number): value is number {
+  return isNumber(value) && Number.isInteger(value) && value >= minimum;
 }
 
 function hasRiskScores(value: Record<string, unknown>) {

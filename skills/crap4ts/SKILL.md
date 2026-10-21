@@ -1,6 +1,6 @@
 ---
 name: crap4ts
-description: Analyze TypeScript change risk with CRAP scores. Use for project risk reports, changed-function reports, or before-and-after PR comparisons with cached commit reports.
+description: Analyze TypeScript change risk from cyclomatic complexity, cognitive complexity, and coverage. Use for project risk reports, changed-function reports, or before-and-after PR comparisons with cached commit reports.
 ---
 
 # CRAP for TypeScript
@@ -29,7 +29,7 @@ Replace `/path/to/crap4ts` with the resolved skill directory. Use `--help` for o
 
 ## Interpret the result
 
-Report the largest current scores and score increases with function locations. Explain whether complexity or coverage drives each result. Scores below 5 indicate low measured risk; 5 to below 30 suggest focused tests or simpler control flow; 30 or more deserve priority before changes. These are heuristics.
+Report the largest current scores and score increases with function locations. Explain the cyclomatic (`CC`), cognitive (`Cog`), and coverage contributions. This skill adds Sonar-style cognitive complexity to the classic CRAP formula, so full coverage leaves both complexity costs in the score. Read [measurement conventions](references/measurement.md) for the formula and cognitive counting rules. Calibrate project-specific limits against representative code rather than applying classic CRAP score bands.
 
 `N/A` means coverage is indeterminate. Check coverage inclusion, paths, and source maps before attributing it to missing tests. LCOV measures executable lines; shared lines can share hits, and coverage does not establish useful assertions or full branch coverage. Use the runner's detailed report to investigate suspicious scores. See [measurement conventions](references/measurement.md) when those details matter.
 

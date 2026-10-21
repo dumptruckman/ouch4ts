@@ -46,11 +46,11 @@ async function comparisonPaths(options: ComparisonOptions, root: string) {
 async function settingsFingerprint(options: ComparisonOptions, root: string) {
   const analyzer = createHash("sha256");
   const extension = extname(import.meta.url);
-  for (const file of ["index", "project", "files"]) {
+  for (const file of ["index", "cognitive", "project", "files"]) {
     analyzer.update(await readFile(new URL(file + extension, import.meta.url)));
   }
   return createHash("sha256").update(JSON.stringify({
-    version: 1, analyzer: analyzer.digest("hex"), typescript: ts.version,
+    version: 2, analyzer: analyzer.digest("hex"), typescript: ts.version,
     node: process.version, platform: process.platform, arch: process.arch,
     project: relative(root, options.cwd), sourceRoots: options.sourceRoots, lcov: options.lcov,
     setupCommand: options.setupCommand, coverageCommand: options.coverageCommand,
@@ -141,12 +141,12 @@ function unchangedGroup(group: MetricGroup) {
 }
 
 function groupScores(entries: Metric[]) {
-  const scores = entries.map(entry => JSON.stringify([entry.complexity, entry.coverage, entry.crap]));
+  const scores = entries.map(entry => JSON.stringify([entry.complexity, entry.cognitive, entry.coverage, entry.crap]));
   return scores.sort().join("\0");
 }
 
 function sameScores(base: Metric | null, head: Metric | null) {
-  return base !== null && head !== null && base.complexity === head.complexity &&
+  return base !== null && head !== null && base.complexity === head.complexity && base.cognitive === head.cognitive &&
     base.coverage === head.coverage && base.crap === head.crap;
 }
 
@@ -171,9 +171,10 @@ function comparisonStatus(base: Metric | null, head: Metric | null) {
 }
 
 function metricDeltas(base: Metric | null, head: Metric | null) {
-  if (base === null || head === null) return { complexity: null, coverage: null, crap: null };
+  if (base === null || head === null) return { complexity: null, cognitive: null, coverage: null, crap: null };
   return {
     complexity: head.complexity - base.complexity,
+    cognitive: head.cognitive - base.cognitive,
     coverage: scoreDelta(base.coverage, head.coverage),
     crap: scoreDelta(base.crap, head.crap),
   };
