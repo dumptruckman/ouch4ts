@@ -47,13 +47,15 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js
 node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js orders billing
 node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js --use-existing-coverage
 node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js \
+  --exclude '**/generated/**' --exclude '**/*.generated.*'
+node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js \
   --source-root packages/app/src --source-root packages/shared/src \
   --coverage-command 'pnpm test:coverage' --lcov coverage/lcov.info
 ```
 
 By default, the analyzer detects npm, Yarn, pnpm, or Bun from the project's `packageManager` metadata or lockfiles and runs `test:coverage` with that manager. Workspace projects can inherit detection from parent directories. Without a hint, it uses npm. If that script is absent, pass a complete command such as `--coverage-command 'yarn run coverage'` or `--coverage-command 'pnpm exec vitest run --coverage --coverage.reporter=lcov'`. See [command selection](skills/ouch4ts/references/coverage.md#choose-a-command) for detection precedence and overrides.
 
-The analyzer scans `src` by default. It discovers `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, and `.cts` sources, excluding tests, TypeScript declarations, and generated directories. JavaScript projects need no TypeScript configuration or dependency.
+The analyzer scans `src` by default. It discovers `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, and `.cts` sources, excluding tests, TypeScript declarations, and common build directories. Use repeated `--exclude` globs to skip generated sources before analysis. Patterns match paths relative to the project directory and affect both the table and saved metrics in every report mode. Quote globs to prevent shell expansion. See [source selection rules](skills/ouch4ts/references/measurement.md#source-discovery-and-cyclomatic-complexity). JavaScript projects need no TypeScript configuration or dependency.
 
 The analyzer requires an updated `coverage/lcov.info` and checks freshness using file metadata. A failed command, missing or unchanged report, invalid LCOV, or malformed JavaScript or TypeScript exits with code 1 before writing metrics. `--use-existing-coverage` trusts the existing report and skips command selection and freshness checks. Older metrics remain on disk after a failed run.
 

@@ -20,7 +20,7 @@ export async function compareProject(reference: string, options: ComparisonOptio
   const target = git(["rev-parse", "--verify", "--end-of-options", `${reference}^{commit}`], options.cwd).trim();
   const base = git(["merge-base", target, head], options.cwd).trim();
   const paths = await comparisonPaths(options, root);
-  const normalized = { ...options, ...paths };
+  const normalized = { ...options, ...paths, exclude: [...new Set(options.exclude)].sort() };
   const settingsKey = await settingsFingerprint(normalized, root);
   const snapshotOptions = { ...normalized, root, settingsKey };
   const before = await snapshot(base, snapshotOptions);
@@ -53,7 +53,7 @@ async function settingsFingerprint(options: ComparisonOptions, root: string) {
   return createHash("sha256").update(JSON.stringify({
     version: 2, analyzer: analyzer.digest("hex"), typescript: ts.version,
     node: process.version, platform: process.platform, arch: process.arch,
-    project: relative(root, options.cwd), sourceRoots: options.sourceRoots, lcov: options.lcov,
+    project: relative(root, options.cwd), sourceRoots: options.sourceRoots, exclude: options.exclude, lcov: options.lcov,
     setupCommand: options.setupCommand, coverageCommand: options.coverageCommand,
   })).digest("hex");
 }

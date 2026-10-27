@@ -10,6 +10,7 @@ function parseOptions(args: string[]) {
     help: { type: "boolean", short: "h" },
     "use-existing-coverage": { type: "boolean" },
     "source-root": { type: "string", multiple: true },
+    exclude: { type: "string", multiple: true },
     lcov: { type: "string", default: "coverage/lcov.info" },
     "coverage-command": { type: "string" },
     since: { type: "string" },
@@ -26,6 +27,7 @@ export async function runCli(args: string[], cwd: string) {
     console.log(`Usage: ouch4ts [options] [path-fragment ...]
 
   --source-root <path>       Source directory, repeatable. Default: src
+  --exclude <glob>           Exclude project-relative paths, repeatable. Quote globs.
   --lcov <path>              LCOV report. Default: coverage/lcov.info
   --coverage-command <cmd>   Shell command. Default: <package-manager> run test:coverage
   --use-existing-coverage    Read coverage without running tests or checking freshness
@@ -120,6 +122,7 @@ function formatTable(title: string, rows: string[][]) {
 type CliValues = ReturnType<typeof parseOptions>["values"];
 
 function validateReportMode(values: CliValues) {
+  if (values.exclude?.some(pattern => pattern.trim() === "")) throw new Error("--exclude must not be empty");
   for (const option of ["coverage-command", "setup-command"] as const) {
     if (values[option]?.trim() === "") throw new Error(`--${option} must not be empty`);
   }
@@ -134,7 +137,7 @@ function validateReportMode(values: CliValues) {
 
 function projectOptions(values: CliValues, cwd: string) {
   return {
-    cwd, sourceRoots: values["source-root"] ?? ["src"], lcov: values.lcov,
+    cwd, sourceRoots: values["source-root"] ?? ["src"], exclude: values.exclude ?? [], lcov: values.lcov,
     coverageCommand: values["coverage-command"], useExistingCoverage: values["use-existing-coverage"] ?? false,
   };
 }

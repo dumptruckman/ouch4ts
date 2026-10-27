@@ -12,18 +12,19 @@ export async function reportStamp(path: string) {
   }
 }
 
-export async function discoverSources(root: string): Promise<string[]> {
+export async function discoverSources(root: string, isExcluded: (path: string) => boolean): Promise<string[]> {
+  if (isExcluded(root)) return [];
   const paths: string[] = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
-    paths.push(...await discoverEntrySources(root, entry));
+    paths.push(...await discoverEntrySources(root, entry, isExcluded));
   }
   return paths;
 }
 
-async function discoverEntrySources(root: string, entry: Dirent): Promise<string[]> {
+async function discoverEntrySources(root: string, entry: Dirent, isExcluded: (path: string) => boolean): Promise<string[]> {
   const path = join(root, entry.name);
-  if (entry.isDirectory() && !excludedDirectories.has(entry.name)) return discoverSources(path);
-  return entry.isFile() && isSourceFile(entry.name) ? [path] : [];
+  if (entry.isDirectory() && !excludedDirectories.has(entry.name)) return discoverSources(path, isExcluded);
+  return entry.isFile() && isSourceFile(entry.name) && !isExcluded(path) ? [path] : [];
 }
 
 const excludedDirectories = new Set(["node_modules", ".git", "dist", "build", "coverage", "test", "tests", "__tests__", "__mocks__"]);

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
+import picomatch from "picomatch";
 import { analyze } from "./index.js";
 import { discoverSources, reportStamp } from "./files.js";
 import { defaultCoverageCommand } from "./package-manager.js";
@@ -8,6 +9,7 @@ import { defaultCoverageCommand } from "./package-manager.js";
 export interface ProjectOptions {
   cwd: string;
   sourceRoots: readonly string[];
+  exclude: readonly string[];
   lcov: string;
   coverageCommand: string | undefined;
   useExistingCoverage: boolean;
@@ -15,7 +17,9 @@ export interface ProjectOptions {
 
 export async function analyzeProject(options: ProjectOptions) {
   const { cwd, sourceRoots, lcov, coverageCommand, useExistingCoverage } = options;
-  const paths = [...new Set((await Promise.all(sourceRoots.map(root => discoverSources(resolve(cwd, root))))).flat())];
+  const matchesExclude = picomatch([...options.exclude], { dot: true, nonegate: true });
+  const isExcluded = (path: string) => matchesExclude(relative(cwd, path).split(sep).join("/"));
+  const paths = [...new Set((await Promise.all(sourceRoots.map(root => discoverSources(resolve(cwd, root), isExcluded)))).flat())];
   if (paths.length === 0) throw new Error(`No JavaScript or TypeScript sources found under ${sourceRoots.join(", ")}`);
   const reportPath = resolve(cwd, lcov);
   if (!useExistingCoverage) {

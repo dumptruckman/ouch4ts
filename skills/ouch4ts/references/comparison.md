@@ -48,7 +48,7 @@ The project directory, source roots, and test setup must be usable in both revis
 
 ## Cache and output
 
-Complete per-commit reports live at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`. The fingerprint includes the analyzer and cognitive-counter implementations, TypeScript and Node versions, platform, project directory, normalized roots, LCOV path, and setup and coverage commands. Unchanged settings reuse reports across comparisons; path filters do not invalidate them. Invalid cached data, including reports without a cognitive score, is regenerated, and writes replace cache files atomically.
+Complete per-commit reports live at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`. The fingerprint includes the analyzer and cognitive-counter implementations, TypeScript and Node versions, platform, project directory, normalized roots, exclusion globs, LCOV path, and setup and coverage commands. Changing exclusions regenerates reports; reordering or repeating the same globs reuses them. Unchanged settings reuse reports across comparisons; path filters do not invalidate them. Invalid cached data, including reports without a cognitive score, is regenerated, and writes replace cache files atomically.
 
 Environment values and external services are outside the fingerprint. Before running a comparison, use `--refresh` when those inputs are known to have changed or when a test run was nondeterministic. A cache hit does not establish that external test conditions are unchanged. Treat the cache as disposable local output; recommend excluding `.metrics/cache/` from version control when tracking other metrics, leaving any ignore-file edits to a separate setup request.
 

@@ -103,6 +103,28 @@ test("analyzes mixed JavaScript and TypeScript projects while excluding tests an
   ] });
 });
 
+test("excludes repeated globs before parsing across source roots and omits them from metrics", async () => {
+  const cwd = project({
+    "lib/orders.ts": "export const price = () => 10;",
+    "services/worker.js": "export const work = () => 20;",
+    "lib/generated/client.ts": "function broken( {",
+    "services/nested/generated/client.js": "function broken( {",
+    "lib/schema.generated.ts": "function broken( {",
+    "services/deep/model.generated.mts": "function broken( {",
+    "lib/.cache/client.generated.ts": "function broken( {",
+    "coverage/lcov.info": "SF:lib/orders.ts\nDA:1,1\nend_of_record\nSF:services/worker.js\nDA:1,1\nend_of_record\n",
+  });
+  const result = await run(cwd, "--use-existing-coverage", "--source-root", "lib", "--source-root", "services",
+    "--exclude", "**/generated/**", "--exclude", "**/*.generated.*");
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("price");
+  expect(result.stdout).toContain("work");
+  expect(result.stderr).toBe("");
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({ entries: [
+    { name: "price", file: "lib/orders.ts" }, { name: "work", file: "services/worker.js" },
+  ] });
+});
+
 test.each(["js", "jsx", "mjs", "cjs"])("reports a syntax error for malformed .%s without replacing metrics", async extension => {
   const path = `src/broken.${extension}`;
   const cwd = project({
@@ -221,6 +243,12 @@ test.each([
   const result = await run(project({}), ...args);
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/--(?:coverage|setup)-command must not be empty/);
+});
+
+test.each(["", "  "])("rejects an empty exclusion glob: %j", async pattern => {
+  const result = await run(project({}), "--exclude", pattern);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("--exclude must not be empty");
 });
 
 afterEach(() => {
@@ -378,6 +406,38 @@ test("compare reuses commit reports until refresh is requested", async () => {
   const refreshed = await runComparison(cwd, "--refresh");
   expect(refreshed.status, refreshed.stderr).toBe(0);
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
+});
+
+test("comparison exclusions use project-relative paths and separate reusable caches", async () => {
+  const cwd = comparisonProject({
+    "src/generated/client.ts": "export function generated(flag: boolean) { return 0; }",
+    "src/schema.generated.ts": "export function schema(flag: boolean) { return 0; }",
+  }, "packages/app");
+  writeFileSync(join(cwd, "src/generated/client.ts"), "export function generated(flag: boolean) { if (flag) return 0; return 1; }");
+  writeFileSync(join(cwd, "src/schema.generated.ts"), "export function schema(flag: boolean) { if (flag) return 0; return 1; }");
+  commit(cwd, "Change generated functions");
+  const all = await runComparison(cwd);
+  expect(all.status, all.stderr).toBe(0);
+  const reportPath = join(cwd, ".metrics/ouch-comparison.json");
+  const original = readFileSync(reportPath, "utf8");
+  expect(original).toContain("src/generated/client.ts");
+  expect(original).toContain("src/schema.generated.ts");
+
+  const excluded = await runComparison(cwd, "--exclude", "./src/generated/**", "--exclude", "**/*.generated.*");
+  expect(excluded.status, excluded.stderr).toBe(0);
+  const filtered = readFileSync(reportPath, "utf8");
+  expect(filtered).not.toContain("generated");
+  expect(JSON.parse(filtered).entries).toHaveLength(3);
+  expect(excluded.stderr.match(/Analyzing /g)).toHaveLength(2);
+  expect(readdirSync(join(cwd, ".metrics/cache"))).toHaveLength(4);
+
+  const repeated = await runComparison(cwd, "--exclude", "**/*.generated.*", "--exclude", "./src/generated/**",
+    "--exclude", "**/*.generated.*");
+  expect(repeated.status, repeated.stderr).toBe(0);
+  expect(repeated.stderr.match(/Using cached report/g)).toHaveLength(2);
+  expect(readFileSync(reportPath, "utf8")).toBe(filtered);
+  expect((await runComparison(cwd)).status).toBe(0);
+  expect(readFileSync(reportPath, "utf8")).toBe(original);
 });
 
 test.each(["ts", "js"])("comparison reports cognitive changes in .%s even when coverage and OUCH are unknown", async extension => {
