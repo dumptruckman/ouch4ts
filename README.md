@@ -75,13 +75,13 @@ npx --no-install ouch4ts --use-existing-coverage
 ```text
 OUCH Report
 ===========
-Function  File             CC  Cog   Cov%  OUCH
-price     src/orders.ts:1    2    1  50.0%   3.5
+Function  File             CC  Cog   Cov%  CRAP  OUCH
+price     src/orders.ts:1   2    1  50.0%   2.5   3.5
 ```
 
-Normal analysis replaces `.metrics/ouch.json` with `{ "entries": [...] }`. Entries contain `name`, `file`, `line`, `endLine`, `complexity`, `cognitive`, `coverage`, and `ouch`. `complexity` is cyclomatic complexity; `cognitive` is a nonnegative integer. Line numbers are 1-based. Coverage is a percentage; unknown coverage and OUCH are JSON `null` and display as `N/A`, while both complexities remain available.
+Normal analysis replaces `.metrics/ouch.json` with `{ "entries": [...] }`. Entries contain `name`, `file`, `line`, `endLine`, `complexity`, `cognitive`, `coverage`, `crap`, and `ouch`. `complexity` is cyclomatic complexity; `cognitive` is a nonnegative integer. CRAP is the original score, and `OUCH = CRAP + cognitive`. Line numbers are 1-based. Coverage is a percentage; unknown coverage, CRAP, and OUCH are JSON `null` and display as `N/A`, while both complexities remain available. See the [score formulas](skills/ouch4ts/references/measurement.md#score).
 
-Entries sort by descending score, then file and line. Unknown scores come last. Path fragments filter the table, using OR matching, while the metrics file always contains all functions under the configured roots. Commit `.metrics/` in a measured project if you want to track results over time.
+Entries sort by descending OUCH, then file and line. Unknown scores come last. Path fragments filter the table, using OR matching, while the metrics file always contains all functions under the configured roots. Commit `.metrics/` in a measured project if you want to track results over time.
 
 Higher scores identify functions worth examining for missing tests or simpler control flow. Calibrate project limits against representative code. Classic CRAP score bands do not directly apply to OUCH because it adds cognitive complexity.
 
@@ -111,7 +111,7 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js --compare origin/main 
 
 Comparison mode scores the merge base and committed `HEAD` in temporary detached worktrees. On a cache miss it detects each revision's package manager, installs locked dependencies with lifecycle scripts disabled, then runs coverage using that revision's dependencies and source. Customize preparation with `--setup-command` and coverage with `--coverage-command`. See [default setup commands](skills/ouch4ts/references/comparison.md). Local source edits are preserved and excluded from this mode.
 
-The report shows base and head cyclomatic complexity, cognitive complexity, coverage, OUCH, score delta, and added or removed functions. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. The agent identifies cached or regenerated reports for each commit in its explanation. Environment values and external services are outside the fingerprint; use `--refresh` when those inputs change or a run was nondeterministic. Excluding the cache directory from version control is a separate setup recommendation when tracking `.metrics/`.
+The report shows base and head cyclomatic complexity, cognitive complexity, coverage, CRAP, OUCH, each score's delta, and added or removed functions. Sorting remains by OUCH delta. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. The agent identifies cached or regenerated reports for each commit in its explanation. Environment values and external services are outside the fingerprint; use `--refresh` when those inputs change or a run was nondeterministic. Excluding the cache directory from version control is a separate setup recommendation when tracking `.metrics/`.
 
 The result is saved to `.metrics/ouch-comparison.json`; the ordinary `.metrics/ouch.json` is preserved. Path filters narrow the table, while the saved comparison retains all changed metrics. See [comparison setup, cache rules, and matching conventions](skills/ouch4ts/references/comparison.md).
 

@@ -11,12 +11,12 @@ CRAP = cyclomatic² × (1 - coverage)³ + cyclomatic
 OUCH retains that coverage penalty and adds a cognitive cost that remains at full coverage:
 
 ```text
-OUCH = cyclomatic² × (1 - coverage)³ + cyclomatic + cognitive
+OUCH = CRAP + cognitive
 ```
 
-Coverage is a fraction from 0 to 1 in the formula and a percentage in reports. A function with cyclomatic complexity 2, cognitive complexity 1, and 50% coverage scores 3.5. Full coverage leaves the sum of the two complexities. Cognitive complexity of zero preserves the coverage penalty. Higher OUCH scores indicate more maintenance hassle; they do not estimate maintenance hours or the probability of a defect. Classic CRAP score bands do not directly apply to OUCH.
+Coverage is a fraction from 0 to 1 in the formula and a percentage in reports. A function with cyclomatic complexity 2, cognitive complexity 1, and 50% coverage scores 2.5 CRAP and 3.5 OUCH. Full coverage leaves CRAP at cyclomatic complexity and OUCH at the sum of the two complexities. Cognitive complexity of zero makes the scores equal. Higher OUCH scores indicate more maintenance hassle; they do not estimate maintenance hours or the probability of a defect. Classic CRAP score bands do not directly apply to OUCH.
 
-JSON reports contain the score in `ouch`, cyclomatic complexity in `complexity`, and cognitive complexity in `cognitive`, a nonnegative integer. Both complexities remain available when coverage and OUCH are indeterminate.
+Tables show `CRAP` and `OUCH`; JSON reports contain `crap` and `ouch`. Both scores are `null` in JSON and `N/A` in tables when coverage is indeterminate. Cyclomatic complexity in `complexity` and cognitive complexity in `cognitive`, a nonnegative integer, remain available. Current reports sort by OUCH.
 
 ## Source discovery and cyclomatic complexity
 

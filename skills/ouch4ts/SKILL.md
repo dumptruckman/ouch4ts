@@ -5,7 +5,7 @@ description: Rank JavaScript and TypeScript functions by maintenance hassle usin
 
 # OUCH for JavaScript and TypeScript
 
-Use the bundled analyzer's full-function OUCH scores, Overall Upkeep and Change Hassle, to identify functions needing maintenance attention. The score is derived from CRAP, Change Risk Anti-Patterns, with an added cognitive complexity cost.
+Use the bundled analyzer's full-function OUCH scores, Overall Upkeep and Change Hassle, to identify functions needing maintenance attention. Reports include CRAP, Change Risk Anti-Patterns, alongside OUCH, which adds cognitive complexity to CRAP.
 
 ## Project writes
 
@@ -33,7 +33,7 @@ Replace `/path/to/ouch4ts` with the resolved skill directory. Use `--help` for o
 
 ## Interpret the result
 
-Report the largest current scores and score increases with function locations. Explain the cyclomatic (`CC`), cognitive (`Cog`), and coverage contributions. Full coverage leaves both complexity costs in the score. Read [measurement conventions](references/measurement.md) for the formula and cognitive counting rules. Calibrate project-specific limits against representative code rather than applying classic CRAP score bands.
+Report CRAP alongside the largest current OUCH scores and OUCH increases, with function locations. Explain the cyclomatic (`CC`), cognitive (`Cog`), and coverage contributions. Full coverage leaves CRAP at `CC` and OUCH at `CC + Cog`. Read [measurement conventions](references/measurement.md) for the formulas and cognitive counting rules. Calibrate OUCH limits against representative project code rather than applying classic CRAP score bands.
 
 For successful comparisons, state whether each distinct commit's report was reused from cache or regenerated, using the diagnostics described in [cache and output](references/comparison.md#cache-and-output).
 

@@ -147,7 +147,7 @@ function groupScores(entries: Metric[]) {
   return scores.sort().join("\0");
 }
 
-const scoreFields = ["complexity", "cognitive", "coverage", "ouch"] as const;
+const scoreFields = ["complexity", "cognitive", "coverage", "crap", "ouch"] as const;
 
 function sameScores(base: Metric | null, head: Metric | null) {
   if (base === null || head === null) return false;
@@ -175,11 +175,12 @@ function comparisonStatus(base: Metric | null, head: Metric | null) {
 }
 
 function metricDeltas(base: Metric | null, head: Metric | null) {
-  if (base === null || head === null) return { complexity: null, cognitive: null, coverage: null, ouch: null };
+  if (base === null || head === null) return { complexity: null, cognitive: null, coverage: null, crap: null, ouch: null };
   return {
     complexity: head.complexity - base.complexity,
     cognitive: head.cognitive - base.cognitive,
     coverage: scoreDelta(base.coverage, head.coverage),
+    crap: scoreDelta(base.crap, head.crap),
     ouch: scoreDelta(base.ouch, head.ouch),
   };
 }

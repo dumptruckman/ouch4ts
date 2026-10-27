@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { resolve } from "node:path";
 import { analyze } from "../src/index.js";
 
-test("reports OUCH from cyclomatic complexity, cognitive complexity, and executable line coverage", () => {
+test("reports CRAP and OUCH from complexity and executable line coverage", () => {
   const entries = analyze({
     sources: [{
       path: "src/orders.ts",
@@ -13,21 +13,21 @@ test("reports OUCH from cyclomatic complexity, cognitive complexity, and executa
 
   expect(entries).toEqual([{
     name: "price", file: "src/orders.ts", line: 1, endLine: 4,
-    complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
+    complexity: 2, cognitive: 1, coverage: 50, crap: 2.5, ouch: 3.5,
   }]);
 });
 
 test.each([
   { name: "uncovered nested conditions", body: "if (a) { if (b) { if (c) return 1; } }\nreturn 0;",
-    lines: "DA:2,0\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 0, ouch: 26 } },
+    lines: "DA:2,0\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 0, crap: 20, ouch: 26 } },
   { name: "partly covered nested conditions", body: "if (a) { if (b) { if (c) return 1; } }\nreturn 0;",
-    lines: "DA:2,1\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 50, ouch: 12 } },
+    lines: "DA:2,1\nDA:3,0", expected: { complexity: 4, cognitive: 6, coverage: 50, crap: 6, ouch: 12 } },
   { name: "fully covered nested conditions", body: "if (a) { if (b) { if (c) return 1; } }\nreturn 0;",
-    lines: "DA:2,1\nDA:3,1", expected: { complexity: 4, cognitive: 6, coverage: 100, ouch: 10 } },
+    lines: "DA:2,1\nDA:3,1", expected: { complexity: 4, cognitive: 6, coverage: 100, crap: 4, ouch: 10 } },
   { name: "uncovered optional access", body: "return a?.b ?? 0;", lines: "DA:2,0",
-    expected: { complexity: 3, cognitive: 0, coverage: 0, ouch: 12 } },
+    expected: { complexity: 3, cognitive: 0, coverage: 0, crap: 12, ouch: 12 } },
   { name: "fully covered optional access", body: "return a?.b ?? 0;", lines: "DA:2,1",
-    expected: { complexity: 3, cognitive: 0, coverage: 100, ouch: 3 } },
+    expected: { complexity: 3, cognitive: 0, coverage: 100, crap: 3, ouch: 3 } },
 ])("scores $name without letting coverage erase cognitive complexity", ({ body, lines, expected }) => {
   const [entry] = analyze({
     sources: [{ path: "src/sample.ts", text: `function sample() {\n${body}\n}` }],
@@ -45,7 +45,7 @@ test.each(["js", "jsx", "mjs", "cjs"])("scores JavaScript .%s functions using or
   });
   expect(entries).toEqual([{
     name: "price", file: path, line: 1, endLine: 4,
-    complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
+    complexity: 2, cognitive: 1, coverage: 50, crap: 2.5, ouch: 3.5,
   }]);
 });
 
@@ -56,7 +56,7 @@ test("scores JSX conditional rendering in JavaScript", () => {
   });
   expect(entries).toEqual([{
     name: "View", file: "src/view.jsx", line: 1, endLine: 3,
-    complexity: 2, cognitive: 0, coverage: 100, ouch: 2,
+    complexity: 2, cognitive: 0, coverage: 100, crap: 2, ouch: 2,
   }]);
 });
 
@@ -115,10 +115,10 @@ test("maps exact file paths, merges LCOV records, and sorts known scores before 
     lcov: `SF:${resolve("src/a/index.ts")}\nDA:1,0\nend_of_record\n` +
       "SF:src/a/index.ts\nDA:1,2,checksum\nend_of_record\nSF:src/b/index.ts\nDA:1,0\nend_of_record\n",
   });
-  expect(entries.map(({ file, coverage, ouch }) => ({ file, coverage, ouch }))).toEqual([
-    { file: "src/b/index.ts", coverage: 0, ouch: 2 },
-    { file: "src/a/index.ts", coverage: 100, ouch: 1 },
-    { file: "src/c/index.ts", coverage: null, ouch: null },
+  expect(entries.map(({ file, coverage, crap, ouch }) => ({ file, coverage, crap, ouch }))).toEqual([
+    { file: "src/b/index.ts", coverage: 0, crap: 2, ouch: 2 },
+    { file: "src/a/index.ts", coverage: 100, crap: 1, ouch: 1 },
+    { file: "src/c/index.ts", coverage: null, crap: null, ouch: null },
   ]);
 });
 

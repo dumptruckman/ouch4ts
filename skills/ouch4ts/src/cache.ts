@@ -40,7 +40,7 @@ export async function writeCache(path: string, commit: string, settingsKey: stri
 
 function isMetric(value: unknown): value is Metric {
   if (!isRecord(value)) return false;
-  return hasFunctionIdentity(value) && hasFunctionRange(value) && hasComplexities(value) && hasCoverageAndScore(value);
+  return hasFunctionIdentity(value) && hasFunctionRange(value) && hasComplexities(value) && hasCoverageAndScores(value);
 }
 
 function hasComplexities(value: Record<string, unknown>) {
@@ -63,9 +63,10 @@ function isIntegerAtLeast(value: unknown, minimum: number): value is number {
   return isNumber(value) && Number.isInteger(value) && value >= minimum;
 }
 
-function hasCoverageAndScore(value: Record<string, unknown>) {
-  if (value.coverage === null) return value.ouch === null;
-  return isCoverage(value.coverage) && isNumber(value.ouch) && value.ouch >= 1;
+function hasCoverageAndScores(value: Record<string, unknown>) {
+  if (value.coverage === null) return value.crap === null && value.ouch === null;
+  return isCoverage(value.coverage) && isNumber(value.crap) && value.crap >= 1 &&
+    isNumber(value.ouch) && value.ouch >= 1;
 }
 
 function isCoverage(value: unknown) {

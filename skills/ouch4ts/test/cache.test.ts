@@ -7,7 +7,7 @@ import { readCache, writeCache } from "../src/cache.js";
 const directories: string[] = [];
 const metric = {
   name: "price", file: "src/orders.ts", line: 1, endLine: 4,
-  complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
+  complexity: 2, cognitive: 1, coverage: 50, crap: 2.5, ouch: 3.5,
 };
 
 afterEach(async () => {
@@ -23,7 +23,7 @@ async function cachePath() {
 test.each([
   { name: "known coverage", entry: metric },
   { name: "zero cognitive complexity", entry: { ...metric, cognitive: 0, ouch: 2.5 } },
-  { name: "unknown coverage", entry: { ...metric, coverage: null, ouch: null } },
+  { name: "unknown coverage", entry: { ...metric, coverage: null, crap: null, ouch: null } },
 ])("round-trips a commit report with $name", async ({ entry }) => {
   const path = await cachePath();
   await writeCache(path, "commit", "settings", [entry]);
@@ -46,6 +46,10 @@ test.each([
     { name: "negative cognitive complexity", entry: { ...metric, cognitive: -1 } },
     { name: "fractional cognitive complexity", entry: { ...metric, cognitive: 0.5 } },
     { name: "out-of-range coverage", entry: { ...metric, coverage: 101 } },
+    { name: "missing CRAP score", entry: { ...metric, crap: undefined } },
+    { name: "null CRAP score with known coverage", entry: { ...metric, crap: null } },
+    { name: "zero CRAP score", entry: { ...metric, crap: 0 } },
+    { name: "numeric CRAP score with unknown coverage", entry: { ...metric, coverage: null, ouch: null } },
     { name: "missing score", entry: { ...metric, ouch: undefined } },
     { name: "numeric score with unknown coverage", entry: { ...metric, coverage: null } },
   ].map(({ name, entry }) => ({ name, report: { commit: "commit", settingsKey: "settings", entries: [entry] } })),

@@ -26,7 +26,7 @@ test("help works without source files or a coverage setup", async () => {
 });
 
 test.each([
-  { args: ["--use-existing-coverage"], status: 0, stdout: /price\s+src\/orders.ts:1\s+1\s+0\s+100\.0%\s+1\.0/, stderr: /^$/ },
+  { args: ["--use-existing-coverage"], status: 0, stdout: /price\s+src\/orders.ts:1\s+1\s+0\s+100\.0%\s+1\.0\s+1\.0/, stderr: /^$/ },
   { args: ["--unknown"], status: 1, stdout: /^$/, stderr: /ouch4ts:.*Unknown option/ },
 ])("executable reports results and exit codes for $args", ({ args, status, stdout, stderr }) => {
   const cwd = project({
@@ -95,11 +95,11 @@ test("analyzes mixed JavaScript and TypeScript projects while excluding tests an
   const result = await run(cwd, "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toEqual({ entries: [
-    { name: "common", file: "src/common.cjs", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
-    { name: "module", file: "src/module.mjs", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
-    { name: "script", file: "src/script.js", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
-    { name: "typed", file: "src/typed.ts", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
-    { name: "View", file: "src/view.jsx", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
+    { name: "common", file: "src/common.cjs", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, crap: 1, ouch: 1 },
+    { name: "module", file: "src/module.mjs", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, crap: 1, ouch: 1 },
+    { name: "script", file: "src/script.js", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, crap: 1, ouch: 1 },
+    { name: "typed", file: "src/typed.ts", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, crap: 1, ouch: 1 },
+    { name: "View", file: "src/view.jsx", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, crap: 1, ouch: 1 },
   ] });
 });
 
@@ -361,17 +361,18 @@ test("compare scores committed base and head in isolated checkouts and reports m
   writeFileSync(join(cwd, "src/orders.ts"), localEdit);
   const result = await runComparison(cwd, "--compare", "target");
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toMatch(/^OUCH Comparison\n=+\n.*OUCH base\s+OUCH head/);
+  expect(result.stdout).toMatch(/^OUCH Comparison\n=+\n.*CRAP base\s+CRAP head\s+CRAP delta\s+OUCH base\s+OUCH head/);
+  expect(result.stdout).toMatch(/price\s+src\/orders.ts\s+2 \/ 2\s+1 \/ 1\s+50\.0 \/ 100\.0\s+2\.5\s+2\.0\s+-0\.5\s+3\.5\s+3\.0\s+-0\.5\s+changed/);
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report).toMatchObject({ base, head, entries: expect.arrayContaining([
     { name: "price", file: "src/orders.ts", status: "changed",
-      base: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5 }),
-      head: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 100, ouch: 3 }),
-      delta: { complexity: 0, cognitive: 0, coverage: 50, ouch: -0.5 } },
+      base: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 50, crap: 2.5, ouch: 3.5 }),
+      head: expect.objectContaining({ complexity: 2, cognitive: 1, coverage: 100, crap: 2, ouch: 3 }),
+      delta: { complexity: 0, cognitive: 0, coverage: 50, crap: -0.5, ouch: -0.5 } },
     { name: "added", file: "src/orders.ts", status: "added", base: null,
-      head: expect.objectContaining({ ouch: 1 }), delta: { complexity: null, cognitive: null, coverage: null, ouch: null } },
+      head: expect.objectContaining({ crap: 1, ouch: 1 }), delta: { complexity: null, cognitive: null, coverage: null, crap: null, ouch: null } },
     { name: "removed", file: "src/orders.ts", status: "removed", head: null,
-      base: expect.objectContaining({ ouch: 2 }), delta: { complexity: null, cognitive: null, coverage: null, ouch: null } },
+      base: expect.objectContaining({ crap: 2, ouch: 2 }), delta: { complexity: null, cognitive: null, coverage: null, crap: null, ouch: null } },
   ]) });
   expect(report.entries).toHaveLength(3);
   expect(result.stdout).toContain("price");
@@ -452,9 +453,9 @@ test.each(["ts", "js"])("comparison reports cognitive changes in .%s even when c
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.entries).toContainEqual({
     name: "logic", file: path, status: "changed",
-    base: expect.objectContaining({ complexity: 3, cognitive: 2, coverage: null, ouch: null }),
-    head: expect.objectContaining({ complexity: 3, cognitive: 3, coverage: null, ouch: null }),
-    delta: { complexity: 0, cognitive: 1, coverage: null, ouch: null },
+    base: expect.objectContaining({ complexity: 3, cognitive: 2, coverage: null, crap: null, ouch: null }),
+    head: expect.objectContaining({ complexity: 3, cognitive: 3, coverage: null, crap: null, ouch: null }),
+    delta: { complexity: 0, cognitive: 1, coverage: null, crap: null, ouch: null },
   });
   expect(result.stdout).toContain("Cog base/head");
 });
@@ -516,12 +517,12 @@ test("comparison matches renamed files and a unique callback after line numbers 
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.entries).toEqual(expect.arrayContaining([
     expect.objectContaining({ name: "price", file: "src/purchases.ts", status: "changed",
-      base: expect.objectContaining({ file: "src/orders.ts" }), delta: { complexity: 0, cognitive: 0, coverage: 50, ouch: -0.5 } }),
-    expect.objectContaining({ name: "stable", status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, ouch: 0 } }),
+      base: expect.objectContaining({ file: "src/orders.ts" }), delta: { complexity: 0, cognitive: 0, coverage: 50, crap: -0.5, ouch: -0.5 } }),
+    expect.objectContaining({ name: "stable", status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, crap: 0, ouch: 0 } }),
   ]));
   const callbacks = report.entries.filter((entry: { name: string }) => entry.name.startsWith("callbacks.<anonymous@"));
   expect(callbacks).toHaveLength(1);
-  expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, ouch: 0 } });
+  expect(callbacks[0]).toMatchObject({ status: "renamed", delta: { complexity: 0, cognitive: 0, coverage: 0, crap: 0, ouch: 0 } });
 });
 
 test("comparison preserves unknown coverage without inventing a numeric score delta", async () => {
@@ -532,8 +533,8 @@ test("comparison preserves unknown coverage without inventing a numeric score de
   expect(result.status, result.stderr).toBe(0);
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.entries).toContainEqual(expect.objectContaining({ name: "price", status: "changed",
-    base: expect.objectContaining({ ouch: 3.5 }), head: expect.objectContaining({ coverage: null, ouch: null }),
-    delta: { complexity: 0, cognitive: 0, coverage: null, ouch: null },
+    base: expect.objectContaining({ crap: 2.5, ouch: 3.5 }), head: expect.objectContaining({ coverage: null, crap: null, ouch: null }),
+    delta: { complexity: 0, cognitive: 0, coverage: null, crap: null, ouch: null },
   }));
 });
 
@@ -681,10 +682,10 @@ test.each(["ts", "js"])("since reports changed .%s functions with full scores an
   const result = await run(cwd, "--since", "base", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain(`${path}:1`);
-  expect(result.stdout).toMatch(/changed\s+\S+:1\s+2\s+1\s+50\.0%\s+3\.5/);
+  expect(result.stdout).toMatch(/changed\s+\S+:1\s+2\s+1\s+50\.0%\s+2\.5\s+3\.5/);
   expect(result.stdout).not.toContain("untouched");
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({ entries: [
-    { name: "changed", ouch: 3.5 }, { name: "untouched", ouch: 1 },
+    { name: "changed", crap: 2.5, ouch: 3.5 }, { name: "untouched", crap: 1, ouch: 1 },
   ] });
 });
 
@@ -828,16 +829,22 @@ test("since excludes unchanged functions between hunks even when Git is configur
   expect(result.stdout).not.toContain("middle");
 });
 
-test("prints OUCH scores and saves a machine-readable metrics report", async () => {
+test.each([
+  { name: "partial", lcov: "SF:src/orders.ts\nDA:2,1\nDA:3,0\nend_of_record\n",
+    expected: { coverage: 50, crap: 2.5, ouch: 3.5 }, row: /50\.0%\s+2\.5\s+3\.5/ },
+  { name: "unknown", lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
+    expected: { coverage: null, crap: null, ouch: null }, row: /N\/A\s+N\/A\s+N\/A/ },
+])("prints and saves CRAP alongside OUCH with $name coverage", async ({ lcov, expected, row }) => {
   const cwd = project({
     "src/orders.ts": "export function price(vip: boolean) {\n  if (vip) return 10;\n  return 20;\n}\n",
-    "coverage/lcov.info": "SF:src/orders.ts\nDA:2,1\nDA:3,0\nend_of_record\n",
+    "coverage/lcov.info": lcov,
   });
   const result = await run(cwd, "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toMatch(/^OUCH Report\n=+\nFunction\s+File\s+CC\s+Cog\s+Cov%\s+OUCH\n/);
-  expect(result.stdout).toMatch(/price\s+src\/orders.ts:1\s+2\s+1\s+50\.0%\s+3\.5/);
+  expect(result.stdout).toMatch(/^OUCH Report\n=+\nFunction\s+File\s+CC\s+Cog\s+Cov%\s+CRAP\s+OUCH\n/);
+  expect(result.stdout).toMatch(/price\s+src\/orders.ts:1\s+2\s+1\s+/);
+  expect(result.stdout).toMatch(row);
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toEqual({ entries: [{
-    name: "price", file: "src/orders.ts", line: 1, endLine: 4, complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
+    name: "price", file: "src/orders.ts", line: 1, endLine: 4, complexity: 2, cognitive: 1, ...expected,
   }] });
 });
