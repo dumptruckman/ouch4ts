@@ -3,12 +3,13 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { analyze } from "./index.js";
 import { discoverSources, reportStamp } from "./files.js";
+import { defaultCoverageCommand } from "./package-manager.js";
 
 export interface ProjectOptions {
   cwd: string;
   sourceRoots: readonly string[];
   lcov: string;
-  coverageCommand: string;
+  coverageCommand: string | undefined;
   useExistingCoverage: boolean;
 }
 
@@ -19,7 +20,7 @@ export async function analyzeProject(options: ProjectOptions) {
   const reportPath = resolve(cwd, lcov);
   if (!useExistingCoverage) {
     const before = await reportStamp(reportPath);
-    runCommand(coverageCommand, cwd, "Coverage");
+    runCommand(coverageCommand ?? await defaultCoverageCommand(cwd), cwd, "Coverage");
     const after = await reportStamp(reportPath);
     if (after === null || before === after) throw new Error(`Coverage command did not update ${lcov}`);
   }

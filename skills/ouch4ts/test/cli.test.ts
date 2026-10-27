@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
@@ -103,7 +103,85 @@ test("runs the project's coverage script and replaces stale scores with fresh co
   });
 });
 
+test("explains how to generate coverage when test:coverage is absent", async () => {
+  const cwd = project({
+    "src/orders.ts": "export const price = () => 10;",
+    "package.json": JSON.stringify({ scripts: { test: "node cover.cjs" } }),
+    ".metrics/ouch.json": "previous report",
+  });
+  const result = await run(cwd);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('No "test:coverage" script');
+  expect(result.stderr).toContain("--coverage-command");
+  expect(result.stderr).toContain("--use-existing-coverage");
+  expect(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8")).toBe("previous report");
+});
+
+test.each([
+  { manager: "yarn", metadata: "yarn@1.22.22", lockfiles: {} },
+  { manager: "yarn", metadata: "yarn@4.9.2", lockfiles: { "pnpm-lock.yaml": "" } },
+  { manager: "pnpm", metadata: "pnpm@10.11.0", lockfiles: {} },
+  { manager: "bun", metadata: "bun@1.2.15", lockfiles: {} },
+  { manager: "yarn", lockfiles: { "yarn.lock": "# yarn lockfile v1\n" } },
+  { manager: "yarn", lockfiles: { "yarn.lock": "__metadata:\n  version: 8\n" } },
+  { manager: "pnpm", lockfiles: { "pnpm-lock.yaml": "" } },
+  { manager: "bun", lockfiles: { "bun.lock": "" } },
+  { manager: "bun", lockfiles: { "bun.lockb": "", "bun.lock": "" } },
+])("uses $manager for default coverage with $metadata and $lockfiles", async ({ manager, metadata, lockfiles }) => {
+  usePackageManagers({ [manager]: { "run test:coverage": "cover.cjs" } });
+  const cwd = project({
+    "src/orders.ts": "export const price = () => 10;",
+    "package.json": JSON.stringify({ packageManager: metadata, scripts: { "test:coverage": "exit 9" } }),
+    "cover.cjs": `const fs = require('node:fs'); fs.mkdirSync('coverage'); fs.writeFileSync('coverage/lcov.info', 'SF:src/orders.ts\\nDA:1,1\\nend_of_record\\n');`,
+    ...lockfiles,
+  });
+  const result = await run(cwd);
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toMatch(/price\s+src\/orders.ts:1\s+1\s+0\s+100\.0%\s+1\.0/);
+});
+
+test("finds the workspace package manager above the project directory", async () => {
+  usePackageManagers({ yarn: { "run test:coverage": "cover.cjs" } });
+  const repository = project({
+    "package.json": JSON.stringify({ packageManager: "yarn@4.9.2" }),
+    "packages/app/package.json": JSON.stringify({ scripts: { "test:coverage": "exit 9" } }),
+    "packages/app/src/orders.ts": "export const price = () => 10;",
+    "packages/app/cover.cjs": `const fs = require('node:fs'); fs.mkdirSync('coverage'); fs.writeFileSync('coverage/lcov.info', 'SF:src/orders.ts\\nDA:1,1\\nend_of_record\\n');`,
+  });
+  const result = await run(join(repository, "packages/app"));
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("100.0%");
+});
+
+test.each([
+  { files: { "package.json": JSON.stringify({ packageManager: "other@1.0.0", scripts: { "test:coverage": "exit 9" } }) }, message: /Unsupported packageManager/ },
+  { files: { "package.json": JSON.stringify({ scripts: { "test:coverage": "exit 9" } }), "yarn.lock": "", "pnpm-lock.yaml": "" }, message: /Multiple package-manager lockfiles/ },
+])("explicit commands and existing coverage bypass detection errors: $message", async ({ files, message }) => {
+  const cwd = project({
+    "src/orders.ts": "export const price = () => 10;",
+    "cover.cjs": `const fs = require('node:fs'); fs.mkdirSync('coverage'); fs.writeFileSync('coverage/lcov.info', 'SF:src/orders.ts\\nDA:1,1\\nend_of_record\\n');`,
+    ...files,
+  });
+  const detected = await run(cwd);
+  expect(detected.status).toBe(1);
+  expect(detected.stderr).toMatch(message);
+  expect(detected.stderr).toContain("--coverage-command");
+  expect((await run(cwd, "--coverage-command", "node cover.cjs")).status).toBe(0);
+  expect((await run(cwd, "--use-existing-coverage")).stdout).toContain("100.0%");
+});
+
+test.each([
+  ["--coverage-command", ""],
+  ["--coverage-command", "  "],
+  ["--compare", "HEAD", "--setup-command", "  "],
+])("rejects empty commands: %j", async (...args) => {
+  const result = await run(project({}), ...args);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/--(?:coverage|setup)-command must not be empty/);
+});
+
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const project of projects.splice(0)) rmSync(project, { recursive: true, force: true });
 });
 
@@ -115,6 +193,21 @@ function project(files: Record<string, string>) {
     writeFileSync(join(path, name), contents);
   }
   return path;
+}
+
+function usePackageManagers(commands: Record<string, Record<string, string>>) {
+  const bin = project({});
+  for (const [manager, scripts] of Object.entries(commands)) {
+    const path = join(bin, manager);
+    writeFileSync(path, `#!${process.execPath}
+const scripts = ${JSON.stringify(scripts)};
+const command = process.argv.slice(2).join(' ');
+if (!(command in scripts)) throw new Error('Unexpected ${manager} command: ' + command);
+require('node:child_process').execFileSync(process.execPath, [scripts[command]], { stdio: 'inherit' });
+`);
+    chmodSync(path, 0o755);
+  }
+  vi.stubEnv("PATH", `${bin}${delimiter}${process.env.PATH}`);
 }
 
 function runBinary(cwd: string, ...args: string[]) {
@@ -381,6 +474,81 @@ test("comparison defaults install each revision's lockfile without running insta
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("price");
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(2);
+});
+
+test.each([
+  { manager: "yarn", metadata: "yarn@1.22.22", setup: "install --frozen-lockfile --ignore-scripts", lockfiles: {} },
+  { manager: "yarn", metadata: "yarn@2.4.3", setup: "install --immutable --skip-builds", lockfiles: {} },
+  { manager: "yarn", metadata: "yarn@4.9.2", setup: "install --immutable --mode=skip-build", lockfiles: {} },
+  { manager: "yarn", setup: "install --immutable --mode=skip-build", lockfiles: { "yarn.lock": "__metadata:\n  version: 8\n" } },
+  { manager: "yarn", setup: "install --immutable --skip-builds", yarnVersion: "2.4.3", lockfiles: { "yarn.lock": "__metadata:\n  version: 4\n" } },
+  { manager: "yarn", setup: "install --frozen-lockfile --ignore-scripts", lockfiles: { "yarn.lock": "# yarn lockfile v1\n" } },
+  { manager: "pnpm", metadata: "pnpm@10.11.0", setup: "install --frozen-lockfile --ignore-scripts", lockfiles: {} },
+  { manager: "bun", metadata: "bun@1.2.15", setup: "install --frozen-lockfile --ignore-scripts", lockfiles: {} },
+])("comparison uses $manager $setup with $metadata and $lockfiles", async ({ manager, metadata, setup, lockfiles, yarnVersion }) => {
+  usePackageManagers({ [manager]: { [setup]: "setup.cjs", "run test:coverage": "cover.cjs", "--version": "yarn-version.cjs" } });
+  const cwd = comparisonProject({
+    "package.json": JSON.stringify({ packageManager: metadata, scripts: { "test:coverage": "exit 9" } }),
+    ...(manager === "yarn" ? { "yarn.lock": "# yarn lockfile v1\n" } : {}),
+    "yarn-version.cjs": `console.log(${JSON.stringify(yarnVersion ?? "4.9.2")});`,
+    ...lockfiles,
+  });
+  const result = await run(cwd, "--compare", "base");
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("price");
+  expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(4);
+});
+
+test("comparison requires a Yarn lockfile before its default setup runs", async () => {
+  usePackageManagers({ yarn: { "install --frozen-lockfile --ignore-scripts": "setup.cjs", "run test:coverage": "cover.cjs" } });
+  const cwd = comparisonProject({
+    "package.json": JSON.stringify({ packageManager: "yarn@1.22.22", scripts: { "test:coverage": "exit 9" } }),
+  });
+  const result = await run(cwd, "--compare", "base");
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("requires yarn.lock");
+  expect(result.stderr).toContain("--setup-command");
+  expect(existsSync(join(cwd, "calls.log"))).toBe(false);
+});
+
+test("comparison explains an unavailable Yarn version and accepts an explicit setup command", async () => {
+  usePackageManagers({ yarn: { "--version": "yarn-version.cjs" } });
+  const cwd = comparisonProject({
+    "package.json": JSON.stringify({ scripts: { "test:coverage": "node cover.cjs" } }),
+    "yarn.lock": "__metadata:\n  version: 4\n",
+    "yarn-version.cjs": "process.exit(9);",
+  });
+  const result = await run(cwd, "--compare", "base");
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("yarn --version");
+  expect(result.stderr).toContain("--setup-command");
+  expect(existsSync(join(cwd, "calls.log"))).toBe(false);
+  expect((await runComparison(cwd)).status).toBe(0);
+});
+
+test("comparison resolves package managers separately for each committed revision", async () => {
+  usePackageManagers({
+    pnpm: { "install --frozen-lockfile --ignore-scripts": "setup.cjs", "run test:coverage": "cover-pnpm.cjs" },
+    yarn: { "install --immutable --mode=skip-build": "setup.cjs", "run test:coverage": "cover-yarn.cjs" },
+  });
+  const cwd = comparisonProject({
+    "package.json": JSON.stringify({ packageManager: "pnpm@10.11.0", scripts: { "test:coverage": "exit 9" } }),
+    "cover-pnpm.cjs": `if (require('./package.json').packageManager !== 'pnpm@10.11.0') process.exit(8); require('./cover.cjs');`,
+    "cover-yarn.cjs": `if (require('./package.json').packageManager !== 'yarn@4.9.2') process.exit(8); require('./cover.cjs');`,
+  });
+  writeFileSync(join(cwd, "package.json"), JSON.stringify({ packageManager: "yarn@4.9.2", scripts: { "test:coverage": "exit 9" } }));
+  writeFileSync(join(cwd, "yarn.lock"), "__metadata:\n  version: 8\n");
+  commit(cwd, "Switch to Yarn");
+  const result = await run(cwd, "--compare", "base");
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("price");
+});
+
+test("explicit comparison commands work without package-manager metadata or a coverage script", async () => {
+  const cwd = comparisonProject({ "package.json": JSON.stringify({ packageManager: "other@1.0.0" }) });
+  const result = await runComparison(cwd);
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("price");
 });
 
 test("comparison analyzes one commit once when the merge base is HEAD", async () => {

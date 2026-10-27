@@ -51,7 +51,9 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js \
   --coverage-command 'pnpm test:coverage' --lcov coverage/lcov.info
 ```
 
-By default, the analyzer runs `npm run test:coverage`, requires an updated `coverage/lcov.info`, and scans `src`. It checks freshness using file metadata. A failed command, missing or unchanged report, invalid LCOV, or malformed TypeScript exits with code 1 before writing metrics. `--use-existing-coverage` trusts the existing report and skips the command and freshness check. Older metrics remain on disk after a failed run.
+By default, the analyzer detects npm, Yarn, pnpm, or Bun from the project's `packageManager` metadata or lockfiles and runs `test:coverage` with that manager. Workspace projects can inherit detection from parent directories. Without a hint, it uses npm. If that script is absent, pass a complete command such as `--coverage-command 'yarn run coverage'` or `--coverage-command 'pnpm exec vitest run --coverage --coverage.reporter=lcov'`. See [command selection](skills/ouch4ts/references/coverage.md#choose-a-command) for detection precedence and overrides.
+
+The analyzer requires an updated `coverage/lcov.info` and scans `src` by default. It checks freshness using file metadata. A failed command, missing or unchanged report, invalid LCOV, or malformed TypeScript exits with code 1 before writing metrics. `--use-existing-coverage` trusts the existing report and skips command selection and freshness checks. Older metrics remain on disk after a failed run.
 
 The skill checks existing coverage prerequisites before running tests. Missing tools or required configuration changes stop the report with setup recommendations; the agent does not install project dependencies or edit the project's setup. See [coverage prerequisites](skills/ouch4ts/references/coverage.md) for Vitest, Jest, and c8. Coverage must refer to the original TypeScript, with paths relative to the current directory or absolute paths in the same checkout. Include untested files in coverage through existing settings or command-line options.
 
@@ -103,7 +105,7 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js --compare origin/main
 node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js --compare origin/main --refresh
 ```
 
-Comparison mode scores the merge base and committed `HEAD` in temporary detached worktrees. On a cache miss it runs `npm ci --ignore-scripts`, then the configured coverage command, using each revision's dependencies and source. Customize preparation with `--setup-command`. Local source edits are preserved and excluded from this mode.
+Comparison mode scores the merge base and committed `HEAD` in temporary detached worktrees. On a cache miss it detects each revision's package manager, installs locked dependencies with lifecycle scripts disabled, then runs coverage using that revision's dependencies and source. Customize preparation with `--setup-command` and coverage with `--coverage-command`. See [default setup commands](skills/ouch4ts/references/comparison.md). Local source edits are preserved and excluded from this mode.
 
 The report shows base and head cyclomatic complexity, cognitive complexity, coverage, OUCH, score delta, and added or removed functions. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. The agent identifies cached or regenerated reports for each commit in its explanation. Environment values and external services are outside the fingerprint; use `--refresh` when those inputs change or a run was nondeterministic. Excluding the cache directory from version control is a separate setup recommendation when tracking `.metrics/`.
 

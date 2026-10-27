@@ -8,9 +8,10 @@ import { canonicalPath } from "./files.js";
 import { git } from "./git.js";
 import { analyzeProject, runCommand } from "./project.js";
 import type { ProjectOptions } from "./project.js";
+import { defaultSetupCommand } from "./package-manager.js";
 
 type Metric = Awaited<ReturnType<typeof analyzeProject>>[number];
-type ComparisonOptions = ProjectOptions & { setupCommand: string; refresh: boolean };
+type ComparisonOptions = ProjectOptions & { setupCommand: string | undefined; refresh: boolean };
 type SnapshotOptions = ComparisonOptions & { root: string; settingsKey: string };
 
 export async function compareProject(reference: string, options: ComparisonOptions) {
@@ -46,7 +47,7 @@ async function comparisonPaths(options: ComparisonOptions, root: string) {
 async function settingsFingerprint(options: ComparisonOptions, root: string) {
   const analyzer = createHash("sha256");
   const extension = extname(import.meta.url);
-  for (const file of ["index", "cognitive", "project", "files"]) {
+  for (const file of ["index", "cognitive", "project", "files", "package-manager"]) {
     analyzer.update(await readFile(new URL(file + extension, import.meta.url)));
   }
   return createHash("sha256").update(JSON.stringify({
@@ -74,7 +75,7 @@ async function snapshot(commit: string, options: SnapshotOptions) {
     added = true;
     const cwd = await realpath(resolve(checkout, relative(options.root, options.cwd)));
     console.error(`Analyzing ${commit}`);
-    runCommand(options.setupCommand, cwd, "Setup");
+    runCommand(options.setupCommand ?? await defaultSetupCommand(cwd), cwd, "Setup");
     const entries = await analyzeProject({ ...options, cwd, useExistingCoverage: false });
     await writeCache(cachePath, commit, options.settingsKey, entries);
     return entries;

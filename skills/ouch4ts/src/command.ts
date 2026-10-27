@@ -11,10 +11,10 @@ function parseOptions(args: string[]) {
     "use-existing-coverage": { type: "boolean" },
     "source-root": { type: "string", multiple: true },
     lcov: { type: "string", default: "coverage/lcov.info" },
-    "coverage-command": { type: "string", default: "npm run test:coverage" },
+    "coverage-command": { type: "string" },
     since: { type: "string" },
     compare: { type: "string" },
-    "setup-command": { type: "string", default: "npm ci --ignore-scripts" },
+    "setup-command": { type: "string" },
     refresh: { type: "boolean" },
   } });
 }
@@ -27,11 +27,11 @@ export async function runCli(args: string[], cwd: string) {
 
   --source-root <path>       Source directory, repeatable. Default: src
   --lcov <path>              LCOV report. Default: coverage/lcov.info
-  --coverage-command <cmd>   Shell command. Default: npm run test:coverage
+  --coverage-command <cmd>   Shell command. Default: <package-manager> run test:coverage
   --use-existing-coverage    Read coverage without running tests or checking freshness
   --since <ref>             Show functions changed since the merge base with ref
   --compare <ref>           Compare merge-base and HEAD scores in temporary checkouts
-  --setup-command <cmd>     Comparison setup. Default: npm ci --ignore-scripts
+  --setup-command <cmd>      Comparison setup. Default: detected manager's frozen install
   --refresh                 Regenerate both comparison reports instead of using cache
   -h, --help                Show this help
 
@@ -120,6 +120,9 @@ function formatTable(title: string, rows: string[][]) {
 type CliValues = ReturnType<typeof parseOptions>["values"];
 
 function validateReportMode(values: CliValues) {
+  for (const option of ["coverage-command", "setup-command"] as const) {
+    if (values[option]?.trim() === "") throw new Error(`--${option} must not be empty`);
+  }
   if (values.compare === undefined) {
     if (values.refresh) throw new Error("--refresh requires --compare");
     return;

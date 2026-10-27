@@ -21,12 +21,25 @@ On a cache miss, the tool creates a temporary detached Git worktree for that com
 
 Before running a comparison, inspect both revisions' manifests, lockfiles, test scripts, and coverage configuration. Each revision must already declare compatible runner/provider dependencies and support LCOV with existing configuration or command-line options. If either revision lacks a prerequisite, stop and identify the revision and required setup change. Installed tools in the original checkout do not satisfy these checks.
 
-Setup defaults to `npm ci --ignore-scripts`. Restoring each revision's locked dependencies is allowed only in its temporary checkout; verify that the required tools are installed there before coverage runs. This skips install lifecycle scripts. Supply `--setup-command` for another package manager or existing build steps that write generated build output, following [the project write policy](../SKILL.md#project-writes) and keeping the lockfile frozen. For example:
+Setup and coverage defaults use [package-manager detection](coverage.md#choose-a-command) independently in each revision's temporary checkout. Restoring each revision's locked dependencies is allowed only there; verify that the required tools are installed before coverage runs. Default setup freezes the lockfile and skips install lifecycle scripts:
+
+| Package manager | Default setup command |
+| --- | --- |
+| npm | `npm ci --ignore-scripts` |
+| Yarn Classic | `yarn install --frozen-lockfile --ignore-scripts` |
+| Yarn 2.4 | `yarn install --immutable --skip-builds` |
+| Yarn 3 and newer | `yarn install --immutable --mode=skip-build` |
+| pnpm | `pnpm install --frozen-lockfile --ignore-scripts` |
+| Bun | `bun install --frozen-lockfile --ignore-scripts` |
+
+Default Yarn setup requires `yarn.lock` in the project or an ancestor within the repository. Its major version comes from `packageManager`. Without version metadata, a lockfile containing `__metadata` identifies modern Yarn, and the tool runs `yarn --version` in that directory to select the compatible script-skipping flag. A failed version check requires an explicit setup command. Yarn 2 releases older than 2.4 also need `--setup-command` because they lack the default script-skipping option. See the install options for [Yarn Classic](https://classic.yarnpkg.com/lang/en/docs/cli/install/), [Yarn 2](https://raw.githubusercontent.com/yarnpkg/berry/%40yarnpkg/cli/2.4.3/packages/plugin-essentials/sources/commands/install.ts), [current Yarn](https://yarnpkg.com/cli/install), [pnpm](https://pnpm.io/cli/install), and [Bun](https://bun.com/docs/pm/cli/install).
+
+Supply `--setup-command` to override installation or add existing build steps that write generated output, following [the project write policy](../SKILL.md#project-writes) and keeping the lockfile frozen. Supply `--coverage-command` for the project's coverage script or installed runner. Both overrides apply to both revisions and bypass their respective defaults. For example:
 
 ```bash
 node /path/to/ouch4ts/dist/cli.js --compare origin/main \
-  --setup-command 'pnpm install --frozen-lockfile --ignore-scripts' \
-  --coverage-command 'pnpm test:coverage'
+  --setup-command 'pnpm install --frozen-lockfile --ignore-scripts && pnpm run build' \
+  --coverage-command 'pnpm run coverage'
 ```
 
 Both commands run in each revision's project directory and inherit the launching environment. Use a runtime compatible with both revisions, or commands that select each checkout's required runtime using the user's or project's runtime setup instructions. Local ignored files, including `.env` and project registry configuration, are absent from fresh worktrees; supply required test configuration through the environment or an explicit setup command. Use each revision's matching dependencies and coverage. Shared current-checkout `node_modules` or copied LCOV would invalidate the comparison.
