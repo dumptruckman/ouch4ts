@@ -1,6 +1,6 @@
 ---
 name: ouch4ts
-description: Rank JavaScript and TypeScript functions by maintenance hassle using complexity and coverage. Use for project reports, changed-function reports, or PR score comparisons.
+description: Report JavaScript and TypeScript file complexity and function maintenance hassle. Use for project reports, changed-source reports, or PR score comparisons.
 ---
 
 # OUCH for JavaScript and TypeScript
@@ -33,10 +33,10 @@ Replace `/path/to/ouch4ts` with the resolved skill directory. Use `--help` for o
 
 ## Interpret the result
 
-Report CRAP alongside the largest current OUCH scores and OUCH increases, with function locations. Explain the cyclomatic (`CC`), cognitive (`Cog`), and coverage contributions. Full coverage leaves CRAP at `CC` and OUCH at `CC + Cog`. Read [measurement conventions](references/measurement.md) for the formulas and cognitive counting rules. Calibrate OUCH limits against representative project code rather than applying classic CRAP score bands.
+Start with the largest file cognitive scores or increases, then report CRAP alongside the largest function OUCH scores and increases, with locations. File `CC` and `Cog` use [SonarJS file algorithms](references/measurement.md#file-complexity). Function `Cog incl` includes nested functions and callbacks; use function `CC`, own `Cog`, and coverage to explain CRAP and OUCH. Full coverage leaves CRAP at `CC` and OUCH at `CC + Cog`. Calibrate limits against representative project code.
 
 For successful comparisons, state whether each distinct commit's report was reused from cache or regenerated, using the diagnostics described in [cache and output](references/comparison.md#cache-and-output).
 
 `N/A` means coverage is indeterminate. Check coverage inclusion, paths, and source maps before attributing it to missing tests. LCOV measures executable lines; shared lines can share hits, and coverage does not establish useful assertions or full branch coverage. Use the runner's detailed report to investigate suspicious scores. See [measurement conventions](references/measurement.md) when those details matter.
 
-Normal runs save all analyzed functions in `.metrics/ouch.json`. `--since` and path filters affect the displayed table. A report request authorizes analysis; propose tests or refactoring and perform those changes when requested.
+Normal runs save all function entries and file metrics in `.metrics/ouch.json`. `--since` shows changed functions and whole-file metrics for files with changed lines, including module edits outside functions. Path filters narrow both printed tables; saved reports retain all analyzed sources. A report request authorizes analysis; propose tests or refactoring and perform those changes when requested.

@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
-import { analyze } from "./index.js";
+import { analyzeReport } from "./index.js";
 import { discoverSources, reportStamp } from "./files.js";
 import { defaultCoverageCommand } from "./package-manager.js";
 
@@ -29,7 +29,7 @@ export async function analyzeProject(options: ProjectOptions) {
     if (after === null || before === after) throw new Error(`Coverage command did not update ${lcov}`);
   }
   const sources = await Promise.all(paths.map(async path => ({ path, text: await readFile(path, "utf8") })));
-  return analyze({ sources, lcov: await readFile(reportPath, "utf8"), projectRoot: cwd });
+  return analyzeReport({ sources, lcov: await readFile(reportPath, "utf8"), projectRoot: cwd });
 }
 
 export function runCommand(command: string, cwd: string, label: string) {

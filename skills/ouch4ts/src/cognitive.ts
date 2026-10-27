@@ -21,6 +21,80 @@ export function cognitiveComplexity(node: ts.FunctionLikeDeclaration) {
   return complexity;
 }
 
+type FileFunction = {
+  own: number; nested: number; nestingPenalty: number; structural: boolean; componentName: boolean; returnsJsx: boolean;
+};
+
+/** SonarJS file metrics count module code and aggregate nested functions with their lexical nesting. */
+export function fileComplexity(source: ts.SourceFile) {
+  let complexity = 0;
+  let cognitive = 0;
+  let functions = 0;
+  const countedLogical = new Set<ts.BinaryExpression>();
+  function visit(node: ts.Node, nesting: number, depth: number, top?: FileFunction) {
+    if (ts.isFunctionLike(node)) {
+      if (!("body" in node) || node.body === undefined) return;
+      for (const expression of definitionExpressions(node)) visit(expression, nesting, depth, top);
+      complexity++;
+      functions++;
+      const group = depth === 0 ? {
+        own: 0, nested: 0, nestingPenalty: 0, structural: false,
+        componentName: hasComponentName(node), returnsJsx: false,
+      } : top;
+      const functionNesting = nesting + Number(depth > 1);
+      for (const parameter of node.parameters) visit(parameter, functionNesting, depth + 1, group);
+      visit(node.body, functionNesting, depth + 1, group);
+      if (depth === 0 && group) {
+        const component = group.componentName && group.returnsJsx;
+        cognitive += group.own + group.nested + (group.structural && !component ? group.nestingPenalty : 0);
+      }
+      return;
+    }
+    if (fileDecisionKinds.has(node.kind) || isLogicalExpression(node)) complexity++;
+    const increment = controlFlowIncrement(node, nesting) + logicalIncrement(node, countedLogical);
+    const structural = isStructural(node);
+    if (depth === 0) cognitive += increment;
+    else if (top && depth === 1) {
+      top.own += increment;
+      top.structural ||= structural;
+      if (ts.isReturnStatement(node)) top.returnsJsx ||= isJsxReturn(node.expression);
+    } else if (top) {
+      top.nested += increment;
+      top.nestingPenalty += Number(structural);
+    }
+    const nested = nestedChildren(node);
+    ts.forEachChild(node, child => visit(child, nesting + Number(nested.includes(child)), depth, top));
+  }
+  visit(source, 0, 0);
+  return { complexity, cognitive, functions };
+}
+
+function hasComponentName(node: ts.SignatureDeclaration) {
+  let parent = node.parent;
+  while (ts.isParenthesizedExpression(parent)) parent = parent.parent;
+  const name = (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name
+    ? node.name : ts.isVariableDeclaration(parent) ? parent.name : undefined;
+  if (name === undefined || !ts.isIdentifier(name)) return false;
+  return name.text[0] === name.text[0]?.toUpperCase();
+}
+
+function isJsxReturn(expression: ts.Expression | undefined): boolean {
+  if (expression === undefined) return false;
+  if (ts.isParenthesizedExpression(expression)) return isJsxReturn(expression.expression);
+  return ts.isJsxElement(expression) || ts.isJsxSelfClosingElement(expression) || ts.isJsxFragment(expression);
+}
+
+const fileDecisionKinds = new Set([
+  ts.SyntaxKind.IfStatement, ts.SyntaxKind.ConditionalExpression, ts.SyntaxKind.ForStatement,
+  ts.SyntaxKind.ForInStatement, ts.SyntaxKind.ForOfStatement, ts.SyntaxKind.WhileStatement,
+  ts.SyntaxKind.DoStatement, ts.SyntaxKind.CaseClause, ts.SyntaxKind.DefaultClause,
+]);
+
+function isStructural(node: ts.Node) {
+  if (ts.isIfStatement(node)) return !(ts.isIfStatement(node.parent) && node.parent.elseStatement === node);
+  return isNestingStructure(node);
+}
+
 function definitionExpressions(node: ts.SignatureDeclaration) {
   if (!("body" in node) || node.body === undefined) return [];
   const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];

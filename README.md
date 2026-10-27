@@ -2,7 +2,7 @@
 
 OUCH stands for Overall Upkeep and Change Hassle. This repository pairs an agent skill with an executable analyzer for JavaScript and TypeScript, including mixed projects.
 
-The score is derived from CRAP, Change Risk Anti-Patterns, inspired by [Uncle Bob's crap4clj](https://github.com/unclebob/crap4clj). OUCH adds Sonar-style cognitive complexity to CRAP's cyclomatic complexity and coverage formula to rank functions for maintenance attention. Higher scores indicate more maintenance hassle.
+The score is derived from CRAP, Change Risk Anti-Patterns, inspired by [Uncle Bob's crap4clj](https://github.com/unclebob/crap4clj). OUCH adds Sonar-style cognitive complexity to CRAP's cyclomatic complexity and coverage formula to rank functions for maintenance attention. Higher scores indicate more maintenance hassle. Reports also show SonarJS file cyclomatic and cognitive complexity to identify files worth examining.
 
 ```text
 OUCH = CC² × (1 - coverage)³ + CC + cognitive
@@ -73,15 +73,22 @@ npx --no-install ouch4ts --use-existing-coverage
 ## Output
 
 ```text
+File complexity
+===============
+File           CC  Cog  Functions
+src/orders.ts   2    1          1
+
 OUCH Report
 ===========
-Function  File             CC  Cog   Cov%  CRAP  OUCH
-price     src/orders.ts:1   2    1  50.0%   2.5   3.5
+Function  File             CC  Cog  Cog incl   Cov%  CRAP  OUCH
+price     src/orders.ts:1   2    1         1  50.0%   2.5   3.5
 ```
 
-Normal analysis replaces `.metrics/ouch.json` with `{ "entries": [...] }`. Entries contain `name`, `file`, `line`, `endLine`, `complexity`, `cognitive`, `coverage`, `crap`, and `ouch`. `complexity` is cyclomatic complexity; `cognitive` is a nonnegative integer. CRAP is the original score, and `OUCH = CRAP + cognitive`. Line numbers are 1-based. Coverage is a percentage; unknown coverage, CRAP, and OUCH are JSON `null` and display as `N/A`, while both complexities remain available. See the [score formulas](skills/ouch4ts/references/measurement.md#score).
+Normal analysis replaces `.metrics/ouch.json` with `{ "entries": [...], "files": [...] }`. Function entries contain `name`, `file`, `line`, `endLine`, `complexity`, `cognitive`, `inclusiveCognitive`, `coverage`, `crap`, and `ouch`. `complexity` is cyclomatic complexity; `cognitive` is the function's own cognitive complexity. `inclusiveCognitive`, shown as `Cog incl`, sums own scores across the function and its nested functions and callbacks. CRAP and OUCH use independent function scores, with `OUCH = CRAP + cognitive`. Line numbers are 1-based. Coverage is a percentage; unknown coverage, CRAP, and OUCH are JSON `null` and display as `N/A`, while complexity metrics remain available. See the [score formulas](skills/ouch4ts/references/measurement.md#score).
 
-Entries sort by descending OUCH, then file and line. Unknown scores come last. Path fragments filter the table, using OR matching, while the metrics file always contains all functions under the configured roots. Commit `.metrics/` in a measured project if you want to track results over time.
+Each file metric contains `file`, `complexity`, `cognitive`, and `functions`. File scores follow [SonarJS file algorithms](skills/ouch4ts/references/measurement.md#file-complexity), including module-level code and nested functions. File CC uses different syntax rules from function CC. File cognitive complexity applies nesting rules beyond a simple sum of function scores. It remains available when coverage is indeterminate. File rows sort by descending cognitive complexity, then path.
+
+Function entries sort by descending OUCH, then file and line. Unknown scores come last. Path fragments filter both tables, using OR matching, while the metrics file always contains all functions and files under the configured roots. Commit `.metrics/` in a measured project if you want to track results over time.
 
 Higher scores identify functions worth examining for missing tests or simpler control flow. Calibrate project limits against representative code. Classic CRAP score bands do not directly apply to OUCH because it adds cognitive complexity.
 
@@ -96,7 +103,7 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js --since origin/main --
 
 The analyzer finds the merge base of that reference and `HEAD`, then compares it with the current checkout. It prints functions whose current line ranges overlap added or modified lines. Deletions select a surviving function when the lines immediately before and after the deletion both remain inside that function. Fully deleted functions and pure renames produce no rows. An edited rename uses the new path.
 
-Scores still measure each complete function using current coverage. A nested change can select both the nested and enclosing function. Changes outside function ranges, including test-only changes, can produce an empty table. Path filters further narrow the table, while `.metrics/ouch.json` retains all analyzed functions.
+Scores still measure each complete function using current coverage. A nested change can select both the nested and enclosing function. The file summary shows complete current metrics for source files with changed lines, including edits outside functions. Test-only changes can leave both tables empty. Path filters further narrow both tables, while `.metrics/ouch.json` retains all analyzed functions and files.
 
 The diff includes committed changes plus staged and unstaged tracked edits. Untracked files are excluded; the skill reports that limitation without staging them. Run from the project directory as usual, including projects below the Git root. Git and the target reference's history must be available locally; fetch the target branch and enough history when using a shallow checkout. Invalid references or missing merge bases fail before coverage runs.
 
@@ -111,9 +118,9 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js --compare origin/main 
 
 Comparison mode scores the merge base and committed `HEAD` in temporary detached worktrees. On a cache miss it detects each revision's package manager, installs locked dependencies with lifecycle scripts disabled, then runs coverage using that revision's dependencies and source. Customize preparation with `--setup-command` and coverage with `--coverage-command`. See [default setup commands](skills/ouch4ts/references/comparison.md). Local source edits are preserved and excluded from this mode.
 
-The report shows base and head cyclomatic complexity, cognitive complexity, coverage, CRAP, OUCH, each score's delta, and added or removed functions. Sorting remains by OUCH delta. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. The agent identifies cached or regenerated reports for each commit in its explanation. Environment values and external services are outside the fingerprint; use `--refresh` when those inputs change or a run was nondeterministic. Excluding the cache directory from version control is a separate setup recommendation when tracking `.metrics/`.
+The report shows base and head file metrics and their deltas, followed by function complexity, own and inclusive cognitive complexity, coverage, CRAP, OUCH, each score's delta, and added or removed functions. File rows sort by cognitive delta; function rows sort by OUCH delta. Test-only changes can produce score differences. Unknown scores retain `null` deltas. Complete reports are cached at `.metrics/cache/<commit-sha>-<settings-fingerprint>.json`; repeat comparisons reuse both revisions. The agent identifies cached or regenerated reports for each commit in its explanation. Environment values and external services are outside the fingerprint; use `--refresh` when those inputs change or a run was nondeterministic. Excluding the cache directory from version control is a separate setup recommendation when tracking `.metrics/`.
 
-The result is saved to `.metrics/ouch-comparison.json`; the ordinary `.metrics/ouch.json` is preserved. Path filters narrow the table, while the saved comparison retains all changed metrics. See [comparison setup, cache rules, and matching conventions](skills/ouch4ts/references/comparison.md).
+The result is saved to `.metrics/ouch-comparison.json` with function `entries` and file comparisons in `files`; the ordinary `.metrics/ouch.json` is preserved. Path filters narrow both tables, while the saved comparison retains all changed metrics. See [comparison setup, cache rules, and matching conventions](skills/ouch4ts/references/comparison.md).
 
 ## Measurement conventions
 
@@ -131,7 +138,7 @@ const entries = analyze({
 });
 ```
 
-`analyze` returns the same entries written by the CLI. `projectRoot` defaults to the working directory. It accepts source text and coverage text without reading target source files from disk.
+`analyze` returns the same function entries written by the CLI. Use the exported `analyzeReport` with the same options to obtain `{ entries, files }`. `projectRoot` defaults to the working directory. Both accept source text and coverage text without reading target source files from disk.
 
 ## Development
 

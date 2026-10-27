@@ -10,7 +10,8 @@ import { analyzeProject, runCommand } from "./project.js";
 import type { ProjectOptions } from "./project.js";
 import { defaultSetupCommand } from "./package-manager.js";
 
-type Metric = Awaited<ReturnType<typeof analyzeProject>>[number];
+type Metric = Awaited<ReturnType<typeof analyzeProject>>["entries"][number];
+type FileMetric = Awaited<ReturnType<typeof analyzeProject>>["files"][number];
 type ComparisonOptions = ProjectOptions & { setupCommand: string | undefined; refresh: boolean };
 type SnapshotOptions = ComparisonOptions & { root: string; settingsKey: string };
 
@@ -26,7 +27,10 @@ export async function compareProject(reference: string, options: ComparisonOptio
   const before = await snapshot(base, snapshotOptions);
   const after = base === head ? before : await snapshot(head, snapshotOptions);
   const renames = renamedFiles(base, head, root, options.cwd);
-  return { base, head, entries: compareEntries(before, after, renames) };
+  return {
+    base, head, entries: compareEntries(before.entries, after.entries, renames),
+    files: compareFiles(before.files, after.files, renames),
+  };
 }
 
 async function comparisonPaths(options: ComparisonOptions, root: string) {
@@ -51,7 +55,7 @@ async function settingsFingerprint(options: ComparisonOptions, root: string) {
     analyzer.update(await readFile(new URL(file + extension, import.meta.url)));
   }
   return createHash("sha256").update(JSON.stringify({
-    version: 2, analyzer: analyzer.digest("hex"), typescript: ts.version,
+    version: 3, analyzer: analyzer.digest("hex"), typescript: ts.version,
     node: process.version, platform: process.platform, arch: process.arch,
     project: relative(root, options.cwd), sourceRoots: options.sourceRoots, exclude: options.exclude, lcov: options.lcov,
     setupCommand: options.setupCommand, coverageCommand: options.coverageCommand,
@@ -76,9 +80,9 @@ async function snapshot(commit: string, options: SnapshotOptions) {
     const cwd = await realpath(resolve(checkout, relative(options.root, options.cwd)));
     console.error(`Analyzing ${commit}`);
     runCommand(options.setupCommand ?? await defaultSetupCommand(cwd), cwd, "Setup");
-    const entries = await analyzeProject({ ...options, cwd, useExistingCoverage: false });
-    await writeCache(cachePath, commit, options.settingsKey, entries);
-    return entries;
+    const report = await analyzeProject({ ...options, cwd, useExistingCoverage: false });
+    await writeCache(cachePath, commit, options.settingsKey, report);
+    return report;
   } finally {
     if (added) git(["worktree", "remove", "--force", checkout], options.root);
     await rm(directory, { recursive: true, force: true });
@@ -147,7 +151,7 @@ function groupScores(entries: Metric[]) {
   return scores.sort().join("\0");
 }
 
-const scoreFields = ["complexity", "cognitive", "coverage", "crap", "ouch"] as const;
+const scoreFields = ["complexity", "cognitive", "inclusiveCognitive", "coverage", "crap", "ouch"] as const;
 
 function sameScores(base: Metric | null, head: Metric | null) {
   if (base === null || head === null) return false;
@@ -159,7 +163,7 @@ function comparisonEntry(base: Metric | null, head: Metric | null) {
   if (!entry) return null;
   if (unchangedEntry(base, head)) return null;
   return {
-    name: entry.name, file: entry.file, status: comparisonStatus(base, head), base, head,
+    name: entry.name, file: entry.file, status: comparisonStatus(base, head, sameScores(base, head)), base, head,
     delta: metricDeltas(base, head),
   };
 }
@@ -168,17 +172,18 @@ function unchangedEntry(base: Metric | null, head: Metric | null) {
   return sameScores(base, head) && base?.file === head?.file;
 }
 
-function comparisonStatus(base: Metric | null, head: Metric | null) {
+function comparisonStatus(base: object | null, head: object | null, same: boolean) {
   if (base === null) return "added";
   if (head === null) return "removed";
-  return sameScores(base, head) ? "renamed" : "changed";
+  return same ? "renamed" : "changed";
 }
 
 function metricDeltas(base: Metric | null, head: Metric | null) {
-  if (base === null || head === null) return { complexity: null, cognitive: null, coverage: null, crap: null, ouch: null };
+  if (base === null || head === null) return { complexity: null, cognitive: null, inclusiveCognitive: null, coverage: null, crap: null, ouch: null };
   return {
     complexity: head.complexity - base.complexity,
     cognitive: head.cognitive - base.cognitive,
+    inclusiveCognitive: head.inclusiveCognitive - base.inclusiveCognitive,
     coverage: scoreDelta(base.coverage, head.coverage),
     crap: scoreDelta(base.crap, head.crap),
     ouch: scoreDelta(base.ouch, head.ouch),
@@ -201,4 +206,31 @@ function compareScoreChanges(a: ComparisonEntry, b: ComparisonEntry) {
 
 function currentOrPreviousScore(entry: ComparisonEntry) {
   return entry.head?.ouch ?? entry.base?.ouch ?? -1;
+}
+
+function compareFiles(before: FileMetric[], after: FileMetric[], renames: Map<string, string>) {
+  const base = new Map(before.map(entry => [renames.get(entry.file) ?? entry.file, entry]));
+  const head = new Map(after.map(entry => [entry.file, entry]));
+  return [...new Set([...base.keys(), ...head.keys()])]
+    .map(file => fileComparisonEntry(base.get(file) ?? null, head.get(file) ?? null))
+    .filter(entry => entry !== null)
+    .sort((a, b) => (b.delta.cognitive ?? 0) - (a.delta.cognitive ?? 0)
+      || (b.head?.cognitive ?? b.base?.cognitive ?? 0) - (a.head?.cognitive ?? a.base?.cognitive ?? 0)
+      || a.file.localeCompare(b.file));
+}
+
+function fileComparisonEntry(base: FileMetric | null, head: FileMetric | null) {
+  const entry = head ?? base;
+  if (entry === null) return null;
+  const same = base !== null && head !== null && base.complexity === head.complexity
+    && base.cognitive === head.cognitive && base.functions === head.functions;
+  if (same && base.file === head.file) return null;
+  return {
+    file: entry.file, status: comparisonStatus(base, head, same), base, head,
+    delta: {
+      complexity: scoreDelta(base?.complexity ?? null, head?.complexity ?? null),
+      cognitive: scoreDelta(base?.cognitive ?? null, head?.cognitive ?? null),
+      functions: scoreDelta(base?.functions ?? null, head?.functions ?? null),
+    },
+  };
 }

@@ -4,7 +4,8 @@ import { dirname } from "node:path";
 import type { analyzeProject } from "./project.js";
 import { isMissingFile } from "./files.js";
 
-type Metric = Awaited<ReturnType<typeof analyzeProject>>[number];
+type Report = Awaited<ReturnType<typeof analyzeProject>>;
+type Metric = Report["entries"][number];
 
 export async function readCache(path: string, commit: string, settingsKey: string) {
   let data: unknown;
@@ -14,24 +15,25 @@ export async function readCache(path: string, commit: string, settingsKey: strin
     if (error instanceof SyntaxError || isMissingFile(error)) return null;
     throw error;
   }
-  return cachedEntries(data, commit, settingsKey);
+  return cachedReport(data, commit, settingsKey);
 }
 
-function cachedEntries(data: unknown, commit: string, settingsKey: string) {
+function cachedReport(data: unknown, commit: string, settingsKey: string) {
   if (!isMatchingReport(data, commit, settingsKey)) return null;
   if (!Array.isArray(data.entries) || !data.entries.every(isMetric)) return null;
-  return data.entries;
+  if (!Array.isArray(data.files) || !data.files.every(isFileMetric)) return null;
+  return { entries: data.entries, files: data.files };
 }
 
 function isMatchingReport(data: unknown, commit: string, settingsKey: string): data is Record<string, unknown> {
   return isRecord(data) && data.commit === commit && data.settingsKey === settingsKey;
 }
 
-export async function writeCache(path: string, commit: string, settingsKey: string, entries: Metric[]) {
+export async function writeCache(path: string, commit: string, settingsKey: string, report: Report) {
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, JSON.stringify({ commit, settingsKey, entries }, null, 2) + "\n");
+    await writeFile(temporary, JSON.stringify({ commit, settingsKey, ...report }, null, 2) + "\n");
     await rename(temporary, path);
   } finally {
     await rm(temporary, { force: true });
@@ -44,7 +46,13 @@ function isMetric(value: unknown): value is Metric {
 }
 
 function hasComplexities(value: Record<string, unknown>) {
-  return isIntegerAtLeast(value.complexity, 1) && isIntegerAtLeast(value.cognitive, 0);
+  return isIntegerAtLeast(value.complexity, 1) && isIntegerAtLeast(value.cognitive, 0)
+    && isIntegerAtLeast(value.inclusiveCognitive, value.cognitive);
+}
+
+function isFileMetric(value: unknown): value is Report["files"][number] {
+  return isRecord(value) && typeof value.file === "string" && isIntegerAtLeast(value.complexity, 0)
+    && isIntegerAtLeast(value.cognitive, 0) && isIntegerAtLeast(value.functions, 0);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

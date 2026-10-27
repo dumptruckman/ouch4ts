@@ -18,6 +18,19 @@ Coverage is a fraction from 0 to 1 in the formula and a percentage in reports. A
 
 Tables show `CRAP` and `OUCH`; JSON reports contain `crap` and `ouch`. Both scores are `null` in JSON and `N/A` in tables when coverage is indeterminate. Cyclomatic complexity in `complexity` and cognitive complexity in `cognitive`, a nonnegative integer, remain available. Current reports sort by OUCH.
 
+Function `Cog incl`, JSON `inclusiveCognitive`, sums the function's own cognitive score and the independent scores of all lexically nested functions, counting each once. It resets nesting at each function boundary and adds no function-nesting surcharge. It explains logic inside callbacks when the enclosing function's own score is low. CRAP and OUCH use only independent function complexity and coverage. File metrics use the separate aggregation below.
+
+## File complexity
+
+The file summary follows SonarJS's [file syntax counter](https://github.com/SonarSource/SonarJS/blob/b9f5c7e4d73887a36918aa052ffe02de5c5a0d5d/packages/analysis/src/jsts/analysis/file-artifacts.ts) and [S3776 file aggregation](https://github.com/SonarSource/SonarJS/blob/b9f5c7e4d73887a36918aa052ffe02de5c5a0d5d/packages/analysis/src/jsts/rules/S3776/rule.ts), using the TypeScript AST and the cognitive syntax conventions below.
+
+- File `CC` counts each function with a body, `if`, ternary, loop, switch clause including `default`, and logical `&&`, `||`, or `??` expression across the entire file. Module-level code counts. Empty files score zero. This differs from the function CC rules below: catches, parameter defaults, optional access, and logical assignments add no file CC points. A `default` switch clause adds a file CC point.
+- File `Cog` includes module-level control flow and each top-level function with its descendants. When the top-level function has its own structural control flow, nested structural decisions receive an additional nesting point. Otherwise its immediate nested functions contribute without that outer-function surcharge. Function nesting below those immediate children still increases nesting depth. Logical-only complexity does not trigger the outer-function surcharge.
+- React function components receive the treatment without the outer-function surcharge. Following SonarJS, recognition requires a function name or variable identifier starting with an uppercase character and an explicit return of a JSX element or fragment from that function. A nested callback's JSX return does not identify the outer function as a component.
+- `Functions` counts all functions with bodies, including nested callbacks. Signatures and ambient declarations are excluded. Files without functions still appear.
+
+Normal JSON reports contain `entries` for functions and `files` for file metrics. Each file metric has `file`, `complexity`, `cognitive`, and `functions`. File rows sort by descending cognitive complexity, then path. File metrics are independent of coverage and remain numeric when function scores are `N/A`. They are contextual measures of file complexity; file size and function count affect their interpretation. They do not represent a file-level CRAP or OUCH score, and summing inclusive function scores would double-count nested code.
+
 ## Source discovery and cyclomatic complexity
 
 - Discover JavaScript `.js`, `.jsx`, `.mjs`, and `.cjs` files alongside TypeScript `.ts`, `.tsx`, `.mts`, and `.cts` files. Skip `.d.ts`, `.d.mts`, `.d.cts`, `*.test.*`, and `*.spec.*` files. Skip directories named `node_modules`, `.git`, `dist`, `build`, `coverage`, `test`, `tests`, `__tests__`, and `__mocks__`. Directory symlinks are not followed. Source roots are explicit; `tsconfig` and `jsconfig` include and exclude rules are not consulted.

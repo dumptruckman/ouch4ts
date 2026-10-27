@@ -1,6 +1,6 @@
 import { relative, resolve, sep } from "node:path";
 import ts from "typescript";
-import { cognitiveComplexity } from "./cognitive.js";
+import { cognitiveComplexity, fileComplexity } from "./cognitive.js";
 
 export interface AnalysisOptions {
   sources: readonly { path: string; text: string }[];
@@ -10,8 +10,14 @@ export interface AnalysisOptions {
 
 /** Analyze original JavaScript and TypeScript sources against LCOV mapped to those sources. */
 export function analyze({ sources, lcov, projectRoot = process.cwd() }: AnalysisOptions) {
+  return analyzeReport({ sources, lcov, projectRoot }).entries;
+}
+
+/** Return function scores and SonarJS file metrics from the same parsed sources. */
+export function analyzeReport({ sources, lcov, projectRoot = process.cwd() }: AnalysisOptions) {
   const coverage = readLcov(lcov, projectRoot);
-  return sources.flatMap(({ path, text }) => {
+  const files: { file: string; complexity: number; cognitive: number; functions: number }[] = [];
+  const entries = sources.flatMap(({ path, text }) => {
     const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
     const options = { noResolve: true, noLib: true, allowJs: true };
     const program = ts.createProgram([path], options, {
@@ -22,19 +28,25 @@ export function analyze({ sources, lcov, projectRoot = process.cwd() }: Analysis
     if (error) throw new Error(`${path}: syntax error: ${ts.flattenDiagnosticMessageText(error.messageText, " ")}`);
     const entries: ReturnType<typeof scoreFunction>[] = [];
     const lines = coverage.get(resolve(projectRoot, path));
-    function visit(node: ts.Node, scope = "") {
+    files.push({ file: relative(projectRoot, resolve(projectRoot, path)).split(sep).join("/"), ...fileComplexity(source) });
+    function visit(node: ts.Node, scope = ""): number {
       if (isRuntimeFunction(node)) {
         const name = scope + functionName(node, source);
-        entries.push(scoreFunction(node, source, lines, name, projectRoot));
-        ts.forEachChild(node, child => visit(child, name + "."));
-        return;
+        const entry = scoreFunction(node, source, lines, name, projectRoot);
+        entries.push(entry);
+        ts.forEachChild(node, child => { entry.inclusiveCognitive += visit(child, name + "."); });
+        return entry.inclusiveCognitive;
       }
       const container = className(node);
-      ts.forEachChild(node, child => visit(child, container ? scope + container + "." : scope));
+      let nestedCognitive = 0;
+      ts.forEachChild(node, child => { nestedCognitive += visit(child, container ? scope + container + "." : scope); });
+      return nestedCognitive;
     }
     visit(source);
     return entries;
   }).sort((a, b) => (b.ouch ?? -1) - (a.ouch ?? -1) || a.file.localeCompare(b.file) || a.line - b.line);
+  files.sort((a, b) => b.cognitive - a.cognitive || a.file.localeCompare(b.file));
+  return { entries, files };
 }
 
 function className(node: ts.Node) {
@@ -104,6 +116,7 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
   const crap = fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity;
   return {
     name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity, cognitive,
+    inclusiveCognitive: cognitive,
     coverage: fraction === null ? null : fraction * 100,
     crap,
     ouch: crap === null ? null : crap + cognitive,

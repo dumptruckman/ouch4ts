@@ -3,7 +3,7 @@ import type { analyze } from "./index.js";
 import { git } from "./git.js";
 
 /** Read the Git diff once, then match current-source function ranges against changed lines. */
-export function changedFunctionFilter(reference: string, cwd = process.cwd()) {
+export function changedSourceFilter(reference: string, cwd = process.cwd()) {
   const root = git(["rev-parse", "--show-toplevel"], cwd).trimEnd();
   const commit = git(["rev-parse", "--verify", "--end-of-options", `${reference}^{commit}`], cwd).trim();
   const base = git(["merge-base", commit, "HEAD"], cwd).trim();
@@ -11,8 +11,11 @@ export function changedFunctionFilter(reference: string, cwd = process.cwd()) {
     "--no-relative", "--src-prefix=a/", "--dst-prefix=b/", "--find-renames", "--unified=0",
     "--inter-hunk-context=0", base, "--"], cwd);
   const changes = changedRanges(diff, root);
-  return (entry: ReturnType<typeof analyze>[number]) => (changes.get(resolve(cwd, entry.file)) ?? [])
-    .some(range => overlapsFunction(range, entry));
+  return {
+    matchesFile: (file: string) => changes.has(resolve(cwd, file)),
+    matchesFunction: (entry: ReturnType<typeof analyze>[number]) => (changes.get(resolve(cwd, entry.file)) ?? [])
+      .some(range => overlapsFunction(range, entry)),
+  };
 }
 
 function changedRanges(diff: string, root: string) {
