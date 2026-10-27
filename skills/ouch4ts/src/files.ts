@@ -29,7 +29,7 @@ async function discoverEntrySources(root: string, entry: Dirent): Promise<string
 const excludedDirectories = new Set(["node_modules", ".git", "dist", "build", "coverage", "test", "tests", "__tests__", "__mocks__"]);
 
 function isSourceFile(name: string) {
-  return /\.(?:ts|tsx|mts|cts)$/.test(name) && !/\.d\.[cm]?ts$|\.(?:test|spec)\.[cm]?tsx?$/.test(name);
+  return /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(name) && !/\.d\.[cm]?ts$|\.(?:test|spec)\.[cm]?[jt]sx?$/.test(name);
 }
 
 export function isMissingFile(error: unknown) {

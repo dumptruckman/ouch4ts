@@ -20,7 +20,8 @@ JSON reports contain the score in `ouch`, cyclomatic complexity in `complexity`,
 
 ## Source discovery and cyclomatic complexity
 
-- Discover `.ts`, `.tsx`, `.mts`, and `.cts`. Skip `.d.ts`, `.d.mts`, `.d.cts`, `*.test.*`, and `*.spec.*` files. Skip directories named `node_modules`, `.git`, `dist`, `build`, `coverage`, `test`, `tests`, `__tests__`, and `__mocks__`. Directory symlinks are not followed. Source roots are explicit; `tsconfig` include and exclude rules are not consulted.
+- Discover JavaScript `.js`, `.jsx`, `.mjs`, and `.cjs` files alongside TypeScript `.ts`, `.tsx`, `.mts`, and `.cts` files. Skip `.d.ts`, `.d.mts`, `.d.cts`, `*.test.*`, and `*.spec.*` files. Skip directories named `node_modules`, `.git`, `dist`, `build`, `coverage`, `test`, `tests`, `__tests__`, and `__mocks__`. Directory symlinks are not followed. Source roots are explicit; `tsconfig` and `jsconfig` include and exclude rules are not consulted.
+- The analyzer checks syntax according to each file's extension, without typechecking or executing target source. JavaScript projects need no TypeScript configuration or dependency. TypeScript 6 is pinned in the analyzer because its compiler API parses both languages.
 - Measure functions with bodies: declarations, expressions, arrows, methods, constructors, getters, and setters. Skip overload signatures and ambient declarations. Named class methods include their class name. Nested names include their enclosing function; anonymous callbacks include line and column.
 - Start complexity at 1. Add 1 for each `if`, ternary, `for`, `for-in`, `for-of`, `while`, `do-while`, `catch`, non-default `case`, `&&`, `||`, `??`, `&&=`, `||=`, `??=`, explicit `?.` step, parameter default, and destructuring default. Count nested functions separately. Comments, strings, and conditional types add nothing.
 
@@ -40,4 +41,3 @@ These rules define this tool's measurement. Function-valued ternary branches kee
 
 - Coverage is the fraction of LCOV `DA` lines with positive hits within the function body's statement range. Declaration-only lines and multiline nested bodies are excluded. Repeated records for an exact file path merge their hits. No basename or suffix guessing is used.
 - LCOV cannot distinguish different functions or branches sharing a source line. Nested bodies on a shared line can leave the parent with no independently attributable lines. Empty bodies and functions with no matching executable lines report `N/A`. Coverage does not establish that tests contain useful assertions.
-- The analyzer checks syntax, without typechecking or executing target source. TypeScript 6 is pinned because this implementation uses its compiler API.

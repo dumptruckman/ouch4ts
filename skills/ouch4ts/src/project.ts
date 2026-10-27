@@ -16,7 +16,7 @@ export interface ProjectOptions {
 export async function analyzeProject(options: ProjectOptions) {
   const { cwd, sourceRoots, lcov, coverageCommand, useExistingCoverage } = options;
   const paths = [...new Set((await Promise.all(sourceRoots.map(root => discoverSources(resolve(cwd, root))))).flat())];
-  if (paths.length === 0) throw new Error(`No TypeScript sources found under ${sourceRoots.join(", ")}`);
+  if (paths.length === 0) throw new Error(`No JavaScript or TypeScript sources found under ${sourceRoots.join(", ")}`);
   const reportPath = resolve(cwd, lcov);
   if (!useExistingCoverage) {
     const before = await reportStamp(reportPath);

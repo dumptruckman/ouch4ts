@@ -73,6 +73,49 @@ test("supports custom roots and coverage, filters the table, and rebuilds all me
   expect(result.stderr).toMatch(/2 functions.*N\/A/);
 });
 
+test("analyzes mixed JavaScript and TypeScript projects while excluding tests and generated sources", async () => {
+  const sources = {
+    "src/script.js": "function script() { return 1; }",
+    "src/view.jsx": "export const View = () => <div />;",
+    "src/module.mjs": "export const module = () => 1;",
+    "src/common.cjs": "module.exports = function common() { return 1; };",
+    "src/typed.ts": "export const typed = (): number => 1;",
+  };
+  const excluded = [
+    "src/script.test.js", "src/view.spec.jsx", "src/module.test.mjs", "src/common.spec.cjs",
+    "src/types.d.ts", "src/types.d.mts", "src/types.d.cts", "src/__tests__/helper.js",
+    "src/__mocks__/service.cjs", "src/node_modules/vendor.js", "src/dist/output.js",
+    "src/build/output.mjs", "src/coverage/report.js",
+  ];
+  const cwd = project({
+    ...sources,
+    ...Object.fromEntries(excluded.map(path => [path, "function broken( {"])),
+    "coverage/lcov.info": Object.keys(sources).map(path => `SF:${path}\nDA:1,1\nend_of_record\n`).join(""),
+  });
+  const result = await run(cwd, "--use-existing-coverage");
+  expect(result.status, result.stderr).toBe(0);
+  expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toEqual({ entries: [
+    { name: "common", file: "src/common.cjs", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
+    { name: "module", file: "src/module.mjs", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
+    { name: "script", file: "src/script.js", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
+    { name: "typed", file: "src/typed.ts", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
+    { name: "View", file: "src/view.jsx", line: 1, endLine: 1, complexity: 1, cognitive: 0, coverage: 100, ouch: 1 },
+  ] });
+});
+
+test.each(["js", "jsx", "mjs", "cjs"])("reports a syntax error for malformed .%s without replacing metrics", async extension => {
+  const path = `src/broken.${extension}`;
+  const cwd = project({
+    [path]: "function broken( {",
+    "coverage/lcov.info": `SF:${path}\nDA:1,1\nend_of_record\n`,
+    ".metrics/ouch.json": "previous report",
+  });
+  const result = await run(cwd, "--use-existing-coverage");
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain(`${path}: syntax error:`);
+  expect(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8")).toBe("previous report");
+});
+
 test.each([
   ["process.exit(7)", /Coverage command failed/],
   ["console.log('no coverage generated')", /did not update/],
@@ -337,17 +380,18 @@ test("compare reuses commit reports until refresh is requested", async () => {
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
 });
 
-test("comparison reports cognitive changes even when coverage and OUCH are unknown", async () => {
+test.each(["ts", "js"])("comparison reports cognitive changes in .%s even when coverage and OUCH are unknown", async extension => {
+  const path = `src/logic.${extension}`;
   const cwd = comparisonProject({
-    "src/logic.ts": "export function logic() { if (a) {} if (b) {} }\n",
+    [path]: "export function logic() { if (a) {} if (b) {} }\n",
   });
-  writeFileSync(join(cwd, "src/logic.ts"), "export function logic() { if (a) { if (b) {} } }\n");
+  writeFileSync(join(cwd, path), "export function logic() { if (a) { if (b) {} } }\n");
   commit(cwd, "Nest the conditions");
   const result = await runComparison(cwd);
   expect(result.status, result.stderr).toBe(0);
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.entries).toContainEqual({
-    name: "logic", file: "src/logic.ts", status: "changed",
+    name: "logic", file: path, status: "changed",
     base: expect.objectContaining({ complexity: 3, cognitive: 2, coverage: null, ouch: null }),
     head: expect.objectContaining({ complexity: 3, cognitive: 3, coverage: null, ouch: null }),
     delta: { complexity: 0, cognitive: 1, coverage: null, ouch: null },
@@ -561,21 +605,23 @@ test("comparison analyzes one commit once when the merge base is HEAD", async ()
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8")).entries).toEqual([]);
 });
 
-test("since reports changed functions with full scores and preserves complete metrics", async () => {
-  const before = "export function changed(vip: boolean) {\n  if (vip) return 1;\n  return 2;\n}\n\nexport const untouched = () => 4;\n";
+test.each(["ts", "js"])("since reports changed .%s functions with full scores and preserves complete metrics", async extension => {
+  const path = `src/orders.${extension}`;
+  const before = "export function changed(vip) {\n  if (vip) return 1;\n  return 2;\n}\n\nexport const untouched = () => 4;\n";
   const cwd = project({
-    "src/orders.ts": before,
-    "coverage/lcov.info": "SF:src/orders.ts\nDA:2,1\nDA:3,0\nDA:6,1\nend_of_record\n",
+    [path]: before,
+    "coverage/lcov.info": `SF:${path}\nDA:2,1\nDA:3,0\nDA:6,1\nend_of_record\n`,
   });
   git(cwd, "init", "-q", "--initial-branch=main");
   commit(cwd, "Base");
   git(cwd, "branch", "base");
-  writeFileSync(join(cwd, "src/orders.ts"), before.replace("return 2", "return 3"));
+  writeFileSync(join(cwd, path), before.replace("return 2", "return 3"));
   commit(cwd, "Change price");
 
   const result = await run(cwd, "--since", "base", "--use-existing-coverage");
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toMatch(/changed\s+src\/orders.ts:1\s+2\s+1\s+50\.0%\s+3\.5/);
+  expect(result.stdout).toContain(`${path}:1`);
+  expect(result.stdout).toMatch(/changed\s+\S+:1\s+2\s+1\s+50\.0%\s+3\.5/);
   expect(result.stdout).not.toContain("untouched");
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({ entries: [
     { name: "changed", ouch: 3.5 }, { name: "untouched", ouch: 1 },

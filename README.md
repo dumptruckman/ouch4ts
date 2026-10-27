@@ -1,6 +1,6 @@
 # ouch4ts
 
-OUCH stands for Overall Upkeep and Change Hassle. This repository pairs an agent skill with an executable analyzer for TypeScript.
+OUCH stands for Overall Upkeep and Change Hassle. This repository pairs an agent skill with an executable analyzer for JavaScript and TypeScript, including mixed projects.
 
 The score is derived from CRAP, Change Risk Anti-Patterns, inspired by [Uncle Bob's crap4clj](https://github.com/unclebob/crap4clj). OUCH adds Sonar-style cognitive complexity to CRAP's cyclomatic complexity and coverage formula to rank functions for maintenance attention. Higher scores indicate more maintenance hassle.
 
@@ -36,7 +36,7 @@ mkdir -p ~/.agents/skills
 ln -s /absolute/path/to/ouch4ts/skills/ouch4ts ~/.agents/skills/ouch4ts
 ```
 
-Then ask for a TypeScript OUCH report, or invoke `$ouch4ts`. The skill and analyzer work from this checkout; no npm publication is required.
+Then ask for a JavaScript or TypeScript OUCH report, or invoke `$ouch4ts`. The skill and analyzer work from this checkout; no npm publication is required.
 
 ## Run on a project
 
@@ -53,9 +53,11 @@ node /absolute/path/to/ouch4ts/skills/ouch4ts/dist/cli.js \
 
 By default, the analyzer detects npm, Yarn, pnpm, or Bun from the project's `packageManager` metadata or lockfiles and runs `test:coverage` with that manager. Workspace projects can inherit detection from parent directories. Without a hint, it uses npm. If that script is absent, pass a complete command such as `--coverage-command 'yarn run coverage'` or `--coverage-command 'pnpm exec vitest run --coverage --coverage.reporter=lcov'`. See [command selection](skills/ouch4ts/references/coverage.md#choose-a-command) for detection precedence and overrides.
 
-The analyzer requires an updated `coverage/lcov.info` and scans `src` by default. It checks freshness using file metadata. A failed command, missing or unchanged report, invalid LCOV, or malformed TypeScript exits with code 1 before writing metrics. `--use-existing-coverage` trusts the existing report and skips command selection and freshness checks. Older metrics remain on disk after a failed run.
+The analyzer scans `src` by default. It discovers `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, and `.cts` sources, excluding tests, TypeScript declarations, and generated directories. JavaScript projects need no TypeScript configuration or dependency.
 
-The skill checks existing coverage prerequisites before running tests. Missing tools or required configuration changes stop the report with setup recommendations; the agent does not install project dependencies or edit the project's setup. See [coverage prerequisites](skills/ouch4ts/references/coverage.md) for Vitest, Jest, and c8. Coverage must refer to the original TypeScript, with paths relative to the current directory or absolute paths in the same checkout. Include untested files in coverage through existing settings or command-line options.
+The analyzer requires an updated `coverage/lcov.info` and checks freshness using file metadata. A failed command, missing or unchanged report, invalid LCOV, or malformed JavaScript or TypeScript exits with code 1 before writing metrics. `--use-existing-coverage` trusts the existing report and skips command selection and freshness checks. Older metrics remain on disk after a failed run.
+
+The skill checks existing coverage prerequisites before running tests. Missing tools or required configuration changes stop the report with setup recommendations; the agent does not install project dependencies or edit the project's setup. See [coverage prerequisites](skills/ouch4ts/references/coverage.md) for Vitest, Jest, and c8. Coverage must refer to the original JavaScript or TypeScript, with paths relative to the current directory or absolute paths in the same checkout. Include untested files in coverage through existing settings or command-line options.
 
 The skill leaves the target repository unchanged except for reports, coverage files, caches, and other tool-generated artifacts. See [the project write policy](skills/ouch4ts/SKILL.md#project-writes).
 

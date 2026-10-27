@@ -2,7 +2,7 @@
 
 Apply the preflight in [the skill](../SKILL.md#prepare) before generating coverage. Inspect installed dependencies and existing scripts and configuration without executing them. Keep the project's package manager, runner, and provider. Use command-line options where they can generate LCOV without persistent changes. The configuration examples below are recommendations for the user if the existing setup is insufficient.
 
-Generate LCOV mapped to the original TypeScript files from the same project root used for analysis. Include untested source files so they appear with zero hits rather than being absent. With `--use-existing-coverage`, the runner and provider need not be installed; check the supplied report's source paths and explain that its freshness is trusted.
+Generate LCOV mapped to the original JavaScript or TypeScript files from the same project root used for analysis. Include untested source files so they appear with zero hits rather than being absent. With `--use-existing-coverage`, the runner and provider need not be installed; check the supplied report's source paths and explain that its freshness is trusted.
 
 ## Choose a command
 
@@ -36,7 +36,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      include: ["src/**/*.{ts,tsx,mts,cts}"],
+      include: ["src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
     },
   },
 });
@@ -46,19 +46,19 @@ Use the installed Vitest with `vitest run --coverage` as the coverage command. F
 
 ## Jest
 
-Keep the project's TypeScript transform and source maps. Check whether the installed Jest can produce the required coverage with command-line options. If configuration changes are required, recommend these fields for its existing configuration:
+Keep the project's existing transforms and source maps for JSX, TypeScript, or compiled JavaScript. Plain JavaScript needs no TypeScript transform. Check whether the installed Jest can produce the required coverage with command-line options. If configuration changes are required, recommend these fields for its existing configuration:
 
 ```ts
 coverageReporters: ["text", "lcov"],
-collectCoverageFrom: ["src/**/*.{ts,tsx,mts,cts}", "!src/**/*.d.ts"],
+collectCoverageFrom: ["src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}", "!src/**/*.d.{ts,mts,cts}"],
 ```
 
 Use the installed Jest with `jest --coverage --runInBand` as the coverage command. See [Jest's coverage options](https://jestjs.io/docs/configuration#collectcoveragefrom-array).
 
 ## c8 and other runners
 
-Use an already installed coverage tool with an LCOV reporter and source maps. For example, when c8 is installed, wrap an existing test command with `c8 --all --reporter=lcov --reporter=text`, preserving its TypeScript loader and test selection. If the tool is missing, stop and recommend the required dependency. See [c8](https://github.com/bcoe/c8).
+Use an already installed coverage tool with an LCOV reporter and source maps when the source is transformed. For example, when c8 is installed, wrap an existing test command with `c8 --all --reporter=lcov --reporter=text`, preserving its existing loaders and test selection. If the tool is missing, stop and recommend the required dependency. See [c8](https://github.com/bcoe/c8).
 
-The analyzer defaults to `coverage/lcov.info`. Use `--lcov` for another report location. Relative `SF:` paths resolve against the working directory; absolute paths must name the same checkout. Reports pointing at compiled JavaScript need source-map remapping before analysis.
+The analyzer defaults to `coverage/lcov.info`. Use `--lcov` for another report location. Relative `SF:` paths resolve against the working directory; absolute paths must name the same checkout. Reports pointing at transpiled or bundled output need source-map remapping to the original JavaScript or TypeScript before analysis. Coverage of untransformed JavaScript can refer directly to its source files.
 
 If coverage runs with a different Node version or in another environment, generate and remap it first, then run with `--use-existing-coverage`. That flag trusts the report's freshness, so regenerate it after source changes.

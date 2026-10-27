@@ -36,11 +36,44 @@ test.each([
   expect(entry).toMatchObject(expected);
 });
 
-test("rejects malformed TypeScript rather than scoring the parser's recovery tree", () => {
+test.each(["js", "jsx", "mjs", "cjs"])("scores JavaScript .%s functions using original-source coverage", extension => {
+  const path = `src/orders.${extension}`;
+  const entries = analyze({
+    sources: [{ path, text: "function price(vip) {\n  if (vip) return 10;\n  return 20;\n}\n" +
+      (extension === "cjs" ? "module.exports = { price };" : "export { price };") }],
+    lcov: `SF:${path}\nDA:2,1\nDA:3,0\nend_of_record\n`,
+  });
+  expect(entries).toEqual([{
+    name: "price", file: path, line: 1, endLine: 4,
+    complexity: 2, cognitive: 1, coverage: 50, ouch: 3.5,
+  }]);
+});
+
+test("scores JSX conditional rendering in JavaScript", () => {
+  const entries = analyze({
+    sources: [{ path: "src/view.jsx", text: "export function View({ ready }) {\n  return <div>{ready && <span />}</div>;\n}" }],
+    lcov: "SF:src/view.jsx\nDA:2,1\nend_of_record\n",
+  });
+  expect(entries).toEqual([{
+    name: "View", file: "src/view.jsx", line: 1, endLine: 3,
+    complexity: 2, cognitive: 0, coverage: 100, ouch: 2,
+  }]);
+});
+
+test.each(["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"])("rejects malformed .%s source", extension => {
+  const path = `src/broken.${extension}`;
   expect(() => analyze({
-    sources: [{ path: "src/broken.ts", text: "export function broken( {" }],
-    lcov: "SF:src/broken.ts\nDA:1,1\nend_of_record\n",
-  })).toThrow(/src\/broken.ts.*[Ss]yntax/);
+    sources: [{ path, text: "export function broken( {" }],
+    lcov: `SF:${path}\nDA:1,1\nend_of_record\n`,
+  })).toThrow(`${path}: syntax error:`);
+});
+
+test.each(["js", "jsx", "mjs", "cjs"])("rejects TypeScript annotations in .%s files", extension => {
+  const path = `src/typed.${extension}`;
+  expect(() => analyze({
+    sources: [{ path, text: "export const price = (vip: boolean) => vip ? 10 : 20;" }],
+    lcov: `SF:${path}\nDA:1,1\nend_of_record\n`,
+  })).toThrow(`${path}: syntax error:`);
 });
 
 test.each([

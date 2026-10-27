@@ -1,9 +1,9 @@
 ---
 name: ouch4ts
-description: Analyze TypeScript maintenance hassle from cyclomatic complexity, cognitive complexity, and coverage. Use for project maintenance reports, changed-function reports, or before-and-after PR comparisons with cached commit reports.
+description: Rank JavaScript and TypeScript functions by maintenance hassle using complexity and coverage. Use for project reports, changed-function reports, or PR score comparisons.
 ---
 
-# OUCH for TypeScript
+# OUCH for JavaScript and TypeScript
 
 Use the bundled analyzer's full-function OUCH scores, Overall Upkeep and Change Hassle, to identify functions needing maintenance attention. The score is derived from CRAP, Change Risk Anti-Patterns, with an added cognitive complexity cost.
 
@@ -13,7 +13,7 @@ Leave the target repository unchanged except for reports, coverage files, caches
 
 ## Prepare
 
-1. Inspect the target project's source roots, test scripts, package manager, and runtime requirements. Verify that compatible runtimes and package-manager executables needed for the selected mode are available. For fresh coverage, follow [coverage command selection and prerequisites](references/coverage.md#choose-a-command). Select an existing script or installed runner that produces LCOV, passing `--coverage-command` when the default does not fit. For comparisons, apply the per-revision checks in [commit comparisons](references/comparison.md). Existing LCOV needs no installed runner or provider. If prerequisites are missing, stop with exact runtime, dependency/version, or configuration recommendations.
+1. Inspect the target project's [source languages and roots](references/measurement.md#source-discovery-and-cyclomatic-complexity), test scripts, package manager, and runtime requirements. Verify that compatible runtimes and package-manager executables needed for the selected mode are available. For fresh coverage, follow [coverage command selection and prerequisites](references/coverage.md#choose-a-command). Select an existing script or installed runner that produces LCOV, passing `--coverage-command` when the default does not fit. For comparisons, apply the per-revision checks in [commit comparisons](references/comparison.md). Existing LCOV needs no installed runner or provider. If prerequisites are missing, stop with exact runtime, dependency/version, or configuration recommendations.
 2. Resolve this skill's directory to an absolute real path. Reuse its `dist/cli.js` when that build and its declared runtime dependencies are present. npm package installs include the build. For missing dependencies or a missing build, follow [analyzer bootstrap](references/bootstrap.md) in the resolved skill directory.
 3. Run from the target project directory. The analyzer needs Node 22 or newer. Keep the project's runtime when generating coverage; with an older project runtime, generate coverage first and use a compatible Node for `--use-existing-coverage`.
 

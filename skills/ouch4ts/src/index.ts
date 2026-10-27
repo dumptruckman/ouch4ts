@@ -8,12 +8,12 @@ export interface AnalysisOptions {
   projectRoot?: string;
 }
 
-/** Analyze original TypeScript sources against an LCOV report remapped to those sources. */
+/** Analyze original JavaScript and TypeScript sources against LCOV mapped to those sources. */
 export function analyze({ sources, lcov, projectRoot = process.cwd() }: AnalysisOptions) {
   const coverage = readLcov(lcov, projectRoot);
   return sources.flatMap(({ path, text }) => {
     const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
-    const options = { noResolve: true, noLib: true };
+    const options = { noResolve: true, noLib: true, allowJs: true };
     const program = ts.createProgram([path], options, {
       ...ts.createCompilerHost(options),
       getSourceFile: file => resolve(file) === resolve(path) ? source : undefined,

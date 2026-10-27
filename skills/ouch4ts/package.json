@@ -1,7 +1,7 @@
 {
   "name": "ouch4ts",
   "version": "0.1.0",
-  "description": "OUCH scores for TypeScript functions, with an agent skill",
+  "description": "OUCH scores for JavaScript and TypeScript functions, with an agent skill",
   "type": "module",
   "bin": {
     "ouch4ts": "dist/cli.js"
