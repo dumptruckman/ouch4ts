@@ -2,8 +2,8 @@
 
 Use these steps only when the skill installation is missing dependencies or a build. Check the skill's manifest and verify its runtime dependencies are present before reusing `dist/cli.js`.
 
-1. Resolve symlinks in the skill installation and target project paths. Confirm the skill installation is outside the target project's Git root, or outside the project directory when it has no Git repository. If it is inside, stop and recommend installing the skill outside the target repository or having the user build it as a separate setup action.
-2. From that external skill directory, load nvm and select its `.nvmrc` runtime. Run only the install/build commands needed below. Keep them scoped to that directory with an explicit npm prefix and workspaces disabled. If a build is missing and the installation has no source/build configuration, stop and recommend reinstalling a built analyzer.
+1. Resolve symlinks in the skill installation path. Use that resolved directory for analyzer setup, including when the skill is installed inside the target repository. Install the analyzer's dependencies in its own `node_modules` and write build output to its own `dist/`. Leave the target project's manifests, lockfiles, dependencies, and configuration unchanged.
+2. From that skill directory, load nvm and select its `.nvmrc` runtime. Run only the install/build commands needed below. Keep them scoped to that directory with an explicit npm prefix and workspaces disabled. If a build is missing and the installation has no source/build configuration, stop and recommend reinstalling a built analyzer.
 
    ```bash
    . "$HOME/.nvm/nvm.sh"
@@ -15,4 +15,4 @@ Use these steps only when the skill installation is missing dependencies or a bu
    ```
 
    `--ignore-scripts` skips dependency lifecycle scripts; the explicit build command still runs, with its pre/post hooks disabled.
-3. Confirm `dist/cli.js` and its runtime dependencies are present before returning to the target project. If installation or building fails, stop and report the missing requirement and recommended setup action. Do not automatically retry with lifecycle scripts enabled or install into the target project.
+3. Confirm `dist/cli.js` and its runtime dependencies are present before returning to the target project. If installation or building fails, stop and report the missing requirement and recommended setup action. Do not automatically retry with lifecycle scripts enabled.

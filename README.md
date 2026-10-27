@@ -29,7 +29,7 @@ The self-contained skill lives in [`skills/ouch4ts`](skills/ouch4ts/SKILL.md). A
 npx skills add <owner>/<repo> --skill ouch4ts
 ```
 
-The agent reuses a built analyzer when its runtime dependencies are present. Missing dependencies or a source build are bootstrapped in an external skill directory with lifecycle scripts disabled and an explicit build when needed. If the skill resolves inside the target repository and needs installation or building, the agent stops with setup recommendations. See [analyzer bootstrap](skills/ouch4ts/references/bootstrap.md). The skill includes its source, lockfile, runtime and build configuration, tests, and references; it needs no files from the repository root.
+The agent reuses a built analyzer when its runtime dependencies are present. Otherwise, it installs dependencies and builds inside the resolved skill directory, including project-local installations. Dependencies go into the skill's own `node_modules` and build output into its own `dist/`, with lifecycle scripts disabled and npm workspaces disabled. The target project's manifests, lockfiles, dependencies, and configuration stay unchanged. See [analyzer bootstrap](skills/ouch4ts/references/bootstrap.md). The skill includes its source, lockfile, runtime and build configuration, tests, and references; it needs no files from the repository root.
 
 For a local checkout, link the skill directory into your agent's skill location. For a Codex setup using `~/.agents/skills`:
 
