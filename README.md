@@ -12,11 +12,9 @@ Coverage is a fraction from 0 to 1. A function with cyclomatic complexity 2, cog
 
 ## Setup
 
-Use Node 22 or newer. Development uses the version in `.nvmrc`.
+Use Node 22 or newer, following your environment's runtime setup instructions. Development uses the version in `.nvmrc`.
 
 ```bash
-. "$HOME/.nvm/nvm.sh"
-nvm use
 npm ci --ignore-scripts
 npm run build
 ```

@@ -3,11 +3,9 @@
 Use these steps only when the skill installation is missing dependencies or a build. Check the skill's manifest and verify its runtime dependencies are present before reusing `dist/cli.js`.
 
 1. Resolve symlinks in the skill installation path. Use that resolved directory for analyzer setup, including when the skill is installed inside the target repository. Install the analyzer's dependencies in its own `node_modules` and write build output to its own `dist/`. Leave the target project's manifests, lockfiles, dependencies, and configuration unchanged.
-2. From that skill directory, load nvm and select its `.nvmrc` runtime. Run only the install/build commands needed below. Keep them scoped to that directory with an explicit npm prefix and workspaces disabled. If a build is missing and the installation has no source/build configuration, stop and recommend reinstalling a built analyzer.
+2. From that skill directory, select Node 22 or newer using the user's or project's runtime setup instructions. `.nvmrc` records the development version. Run only the install/build commands needed below. Keep them scoped to that directory with an explicit npm prefix and workspaces disabled. If a build is missing and the installation has no source/build configuration, stop and recommend reinstalling a built analyzer.
 
    ```bash
-   . "$HOME/.nvm/nvm.sh"
-   nvm use
    # When dependencies are missing
    npm --prefix . ci --ignore-scripts --workspaces=false
    # When the build is missing and source/build configuration is available

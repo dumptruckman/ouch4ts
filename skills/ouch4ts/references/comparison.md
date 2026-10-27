@@ -29,7 +29,7 @@ node /path/to/ouch4ts/dist/cli.js --compare origin/main \
   --coverage-command 'pnpm test:coverage'
 ```
 
-Both commands run in each revision's project directory and inherit the launching environment. Use a runtime compatible with both revisions, or commands that load nvm and select the required runtime in each checkout. Local ignored files, including `.env` and project registry configuration, are absent from fresh worktrees; supply required test configuration through the environment or an explicit setup command. Use each revision's matching dependencies and coverage. Shared current-checkout `node_modules` or copied LCOV would invalidate the comparison.
+Both commands run in each revision's project directory and inherit the launching environment. Use a runtime compatible with both revisions, or commands that select each checkout's required runtime using the user's or project's runtime setup instructions. Local ignored files, including `.env` and project registry configuration, are absent from fresh worktrees; supply required test configuration through the environment or an explicit setup command. Use each revision's matching dependencies and coverage. Shared current-checkout `node_modules` or copied LCOV would invalidate the comparison.
 
 The project directory, source roots, and test setup must be usable in both revisions. Paths must remain inside the Git repository. Setup, coverage, or analysis failure stops the comparison. Successful commit reports remain cached; a previous comparison file remains unchanged after a failed run. `--compare` is separate from `--since` and `--use-existing-coverage`; `--refresh` requires `--compare`.
 
