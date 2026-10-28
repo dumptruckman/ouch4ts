@@ -20,6 +20,62 @@ test("reports Sonar file complexity while keeping nested function scores indepen
   });
 });
 
+// Literal expectations checked against SonarSource's eslint-plugin-sonarjs 4.2.2, rule S3776.
+test.each([
+  { name: "a parenthesized arrow in the consequent", expression: "a ? (() => true) : other", cognitive: 3, ouch: 6,
+    fileComplexity: 4, functions: 2 },
+  { name: "a function expression in the alternate", expression: "a ? other : function () { return true; }", cognitive: 3, ouch: 6,
+    fileComplexity: 4, functions: 2 },
+  { name: "functions in both branches", expression: "a ? () => true : () => false", cognitive: 4, ouch: 7,
+    fileComplexity: 5, functions: 3 },
+])("matches SonarJS nesting after $name", ({ expression, cognitive, ouch, fileComplexity, functions }) => {
+  const report = analyzeReport({
+    sources: [{ path: "src/branch.ts", text: `function sample() {
+  const selected = ${expression};
+  if (b) {}
+}` }],
+    lcov: "SF:src/branch.ts\nDA:2,1\nDA:3,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "sample")).toMatchObject({
+    complexity: 3, cognitive, inclusiveCognitive: cognitive, crap: 3, ouch,
+  });
+  expect(report.files).toEqual([{ file: "src/branch.ts", complexity: fileComplexity, cognitive: 2, functions }]);
+});
+
+test("preserves SonarJS file nesting after a nested function-valued branch", () => {
+  const report = analyzeReport({
+    sources: [{ path: "src/branch.ts", text: `function outer() {
+  function sample() {
+    const selected = a ? () => true : other;
+    if (b) {}
+  }
+  if (c) {}
+}` }],
+    lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(report.files).toEqual([{ file: "src/branch.ts", complexity: 6, cognitive: 7, functions: 3 }]);
+});
+
+test.each([
+  { path: "src/branch.js", statement: "if (a) function nested() {}", cognitive: 3, fileCognitive: 7 },
+  { path: "src/branch.ts", statement: "if (a) {} else function nested() {}", cognitive: 4, fileCognitive: 8 },
+])("matches SonarJS for functions used directly as control-flow bodies in $path", ({ path, statement, cognitive, fileCognitive }) => {
+  const report = analyzeReport({
+    sources: [{ path, text: `function outer() {
+  function middle() {
+    ${statement}
+    if (b) {}
+  }
+  if (c) {}
+}` }],
+    lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "outer.middle")).toMatchObject({
+    cognitive, inclusiveCognitive: cognitive,
+  });
+  expect(report.files).toEqual([{ file: path, complexity: 6, cognitive: fileCognitive, functions: 3 }]);
+});
+
 test.each([
   { name: "a declaration-only outer function", text: "function outer() { function inner() { if (a) {} } }", cognitive: 1 },
   { name: "a logical-only outer function", text: "function outer() { a && b; function inner() { if (c) {} } }", cognitive: 2 },
@@ -94,7 +150,7 @@ test.each([
   { name: "a negated nested AND sequence", body: "return a && !(b && c);", cognitive: 2 },
   { name: "readable fallback and optional access", body: "return (a?.b ?? c) || d;", cognitive: 0 },
   { name: "logical assignments", body: "a &&= b; a ||= b; a ??= b;", cognitive: 0 },
-  { name: "a function-valued ternary followed by a condition", body: "const x = a ? () => true : other; if (b) {}", cognitive: 2 },
+  { name: "a function-valued ternary followed by a condition", body: "const x = a ? () => true : other; if (b) {}", cognitive: 3 },
 ])("measures cognitive complexity for $name", ({ body, cognitive }) => {
   const entries = analyze({
     sources: [{ path: "src/sample.ts", text: `function sample() { ${body} }` }],

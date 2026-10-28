@@ -3,13 +3,16 @@ import ts from "typescript";
 /** Measure each function independently, keeping nested function bodies out of its score. */
 export function cognitiveComplexity(node: ts.FunctionLikeDeclaration) {
   let complexity = 0;
+  let retainedNesting = 0;
   const countedLogical = new Set<ts.BinaryExpression>();
   function visit(child: ts.Node, nesting: number) {
     if (ts.isFunctionLike(child)) {
+      // SonarJS retains enclosing-function nesting when a nesting branch is itself a function.
+      retainedNesting += Number(isNestingChild(child));
       for (const expression of definitionExpressions(child)) visit(expression, nesting);
       return;
     }
-    complexity += controlFlowIncrement(child, nesting);
+    complexity += controlFlowIncrement(child, nesting + retainedNesting);
     complexity += logicalIncrement(child, countedLogical);
     const nested = nestedChildren(child);
     ts.forEachChild(child, descendant => {
@@ -19,6 +22,12 @@ export function cognitiveComplexity(node: ts.FunctionLikeDeclaration) {
   for (const parameter of node.parameters) visit(parameter, 0);
   if (node.body !== undefined) visit(node.body, 0);
   return complexity;
+}
+
+function isNestingChild(node: ts.Node) {
+  let expression = node;
+  while (ts.isParenthesizedExpression(expression.parent)) expression = expression.parent;
+  return nestedChildren(expression.parent).includes(expression);
 }
 
 type FileFunction = {
@@ -35,6 +44,7 @@ export function fileComplexity(source: ts.SourceFile) {
 class FileComplexityVisitor {
   readonly metrics = { complexity: 0, cognitive: 0, functions: 0 };
   private readonly countedLogical = new Set<ts.BinaryExpression>();
+  private retainedNesting = 0;
 
   visit(node: ts.Node, nesting: number, depth: number, top?: FileFunction) {
     if (ts.isFunctionLike(node)) {
@@ -42,7 +52,7 @@ class FileComplexityVisitor {
       return;
     }
     if (fileDecisionKinds.has(node.kind) || isLogicalExpression(node)) this.metrics.complexity++;
-    const increment = controlFlowIncrement(node, nesting) + logicalIncrement(node, this.countedLogical);
+    const increment = controlFlowIncrement(node, nesting + this.retainedNesting) + logicalIncrement(node, this.countedLogical);
     this.recordIncrement(node, increment, depth, top);
     const nested = nestedChildren(node);
     ts.forEachChild(node, child => this.visit(child, nesting + Number(nested.includes(child)), depth, top));
@@ -61,6 +71,8 @@ class FileComplexityVisitor {
     for (const parameter of node.parameters) this.visit(parameter, functionNesting, depth + 1, group);
     this.visit(node.body, functionNesting, depth + 1, group);
     this.finishFunction(depth, group);
+    // At deeper function levels, SonarJS also retains this nesting in its file total.
+    if (depth > 1) this.retainedNesting += Number(isNestingChild(node));
   }
 
   private finishFunction(depth: number, group: FileFunction | undefined) {

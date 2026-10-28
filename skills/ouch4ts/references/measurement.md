@@ -41,7 +41,7 @@ Normal JSON reports contain `entries` for functions and `files` for file metrics
 
 ## Cognitive complexity
 
-The counter uses the existing TypeScript AST with [SonarJS S3776-style conventions](https://github.com/SonarSource/SonarJS/blob/master/packages/analysis/src/jsts/rules/S3776/rule.ts):
+The counter uses the existing TypeScript AST to match SonarQube's JavaScript/TypeScript rule S3776, checked against `eslint-plugin-sonarjs` 4.2.2 and its [reference implementation](https://github.com/SonarSource/SonarJS/blob/aebf8d46933ec80ff3437ceb69e320b5a97b7108/packages/analysis/src/jsts/rules/S3776/rule.ts):
 
 - Start each function at zero. Score nested functions independently, resetting their nesting depth and excluding their decisions from the parent.
 - Count decisions in parameter expressions, parameter decorators, and the function body. Computed method names and method decorators contribute to the enclosing function's cognitive score when there is one, rather than the method's own score.
@@ -49,7 +49,9 @@ The counter uses the existing TypeScript AST with [SonarJS S3776-style conventio
 - Add 1 for each logical `&&` sequence, including a new sequence after a different logical operator. Parentheses do not split a sequence. `||` and `??` add no points. Uniform logical chains directly inside a JSX expression are treated as conditional-rendering shorthand and add no logical points; mixed operators and ternaries receive their usual counts.
 - A labeled `break` or `continue` adds 1. Unlabeled jumps, early returns, calls, and recursion add no points. Optional chaining, parameter defaults, logical assignments, types, and annotations add no direct points; decisions inside their expressions still count.
 
-These rules define this tool's measurement. Function-valued ternary branches keep subsequent statements at their original nesting depth, intentionally differing from SonarJS 4.0.3's extra nesting point in that case. Other cognitive algorithms and IDE percentage displays can produce different values.
+SonarJS retains enclosing-function nesting after a function directly occupies a branch that increases nesting. This includes function-valued ternary branches, parenthesized functions, and unbraced `if`/`else` function declarations. Subsequent control flow in the enclosing function receives that nesting increment. At deeper function levels, these branches also retain nesting in subsequent file metrics. These behaviors are preserved for parity with the reference implementation.
+
+SonarJS's independent function scores differ from the general Cognitive Complexity whitepaper's treatment of nested functions and recursion. `inclusiveCognitive` is this tool's additional sum of independent scores, not a SonarQube metric. IDE plugins with a "SonarQube" mode may implement different rules or display a percentage rather than raw points.
 
 ## Coverage
 
