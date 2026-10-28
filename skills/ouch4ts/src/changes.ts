@@ -30,10 +30,10 @@ function changedRanges(diff: string, root: string) {
 
 function currentDiffFile(line: string, root: string, file: string | undefined) {
   if (line.startsWith("diff --git ")) return undefined;
-  return file ?? addedFilePath(line, root);
+  return file ?? fileFromCurrentSideHeader(line, root);
 }
 
-function addedFilePath(line: string, root: string) {
+function fileFromCurrentSideHeader(line: string, root: string) {
   if (line.startsWith("+++ ")) return currentFilePath(line, root);
 }
 

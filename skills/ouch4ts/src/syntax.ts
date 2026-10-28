@@ -25,14 +25,22 @@ function isDestructuringContainer(parent: ts.Node, child: ts.Node) {
 }
 
 function isObjectAssignmentElement(node: ts.Node) {
-  return ts.isPropertyAssignment(node) || ts.isSpreadAssignment(node);
+  return objectAssignmentKinds.has(node.kind);
 }
 
 function containsAssignedExpression(parent: ts.Node, child: ts.Node) {
-  if (ts.isPropertyAssignment(parent)) return parent.initializer === child;
-  if (isSpread(parent)) return parent.expression === child;
-  return false;
+  if (ts.isShorthandPropertyAssignment(parent)) return parent.name === child;
+  return assignedElementExpression(parent) === child;
 }
+
+function assignedElementExpression(node: ts.Node) {
+  if (ts.isPropertyAssignment(node)) return node.initializer;
+  if (isSpread(node)) return node.expression;
+}
+
+const objectAssignmentKinds = new Set([
+  ts.SyntaxKind.PropertyAssignment, ts.SyntaxKind.ShorthandPropertyAssignment, ts.SyntaxKind.SpreadAssignment,
+]);
 
 function isSpread(node: ts.Node): node is ts.SpreadElement | ts.SpreadAssignment {
   return ts.isSpreadElement(node) || ts.isSpreadAssignment(node);

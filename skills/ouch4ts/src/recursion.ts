@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { recursiveCallNodes } from "./cycles.js";
 import {
   assignmentContainer, definitionExpressions, hasImplementation, isAccessor, isAssignment, isAssignmentReference,
   isAssignmentTo, isInitializedDeclaration, isInvocation, isPropertyAccess, isUpdate, unwrapExpression,
@@ -12,7 +13,7 @@ const noWrittenSymbols: ReadonlySet<ts.Symbol> = new Set();
 export function recursiveFunctions(sources: readonly ts.SourceFile[], checker: ts.TypeChecker) {
   const builder = new CallGraphBuilder(checker, writtenSymbols(sources, checker));
   for (const source of sources) builder.visit(source);
-  return new Set([...builder.graph.keys()].filter(node => returnsTo(node, builder.graph)));
+  return recursiveCallNodes(builder.graph);
 }
 
 class CallGraphBuilder {
@@ -59,7 +60,7 @@ function isWrittenAccess(node: PropertyAccess, checker: ts.TypeChecker, written:
 }
 
 function memberDeclarations(node: PropertyAccess, checker: ts.TypeChecker, written = noWrittenSymbols) {
-  return boundMembers(node, checker, written, new Set());
+  return new BindingLookup(checker, written).resolveMembers(node);
 }
 
 function symbolDeclarations(symbol: ts.Symbol | undefined) {
@@ -80,16 +81,21 @@ function propertyUse(node: ts.Expression) {
 function assignedPropertyUse(expression: ts.Node) {
   const parent = expression.parent;
   if (ts.isDeleteExpression(parent)) return { read: false, write: false };
+  return assignmentUse(expression) ?? { read: true, write: isUpdate(parent) };
+}
+
+function assignmentUse(expression: ts.Node) {
+  const parent = expression.parent;
   if (isAssignmentTo(parent, expression)) {
     return { read: parent.operatorToken.kind !== ts.SyntaxKind.EqualsToken, write: true };
   }
-  return { read: true, write: isUpdate(parent) };
+  if (loopAssignmentTarget(parent) === expression) return { read: false, write: true };
 }
 
 function callTarget(node: Invocation, checker: ts.TypeChecker, written: ReadonlySet<ts.Symbol>) {
   const expression = invocationExpression(node);
   if (!isResolvableCall(expression, checker, written)) return;
-  const value = boundValue(expression, checker, written, new Set());
+  const value = new BindingLookup(checker, written).resolveValue(expression);
   return invocationImplementation(node, value, checker, written);
 }
 
@@ -153,7 +159,11 @@ class WrittenSymbolCollector {
       this.recordSymbol(assignedSymbol(node, this.checker));
       return;
     }
-    ts.forEachChild(node, child => this.record(child));
+    ts.forEachChild(node, child => this.recordAssignmentChild(node, child));
+  }
+
+  private recordAssignmentChild(parent: ts.Node, child: ts.Node) {
+    if (assignmentContainer(child) === parent || isAssignmentTo(parent, child)) this.record(child);
   }
 
   private recordSymbol(symbol: ts.Symbol | undefined) {
@@ -161,10 +171,25 @@ class WrittenSymbolCollector {
   }
 
   visit(node: ts.Node) {
-    if (isAssignment(node)) this.record(node.left);
-    if (isUpdate(node)) this.record(node.operand);
+    const target = reassignedExpression(node);
+    if (target) this.record(target);
     ts.forEachChild(node, child => this.visit(child));
   }
+}
+
+function reassignedExpression(node: ts.Node) {
+  if (isAssignment(node)) return node.left;
+  if (isUpdate(node)) return node.operand;
+  return loopAssignmentTarget(node);
+}
+
+function loopAssignmentTarget(node: ts.Node) {
+  if (!isForInOrOf(node)) return;
+  if (!ts.isVariableDeclarationList(node.initializer)) return node.initializer;
+}
+
+function isForInOrOf(node: ts.Node): node is ts.ForInStatement | ts.ForOfStatement {
+  return ts.isForInStatement(node) || ts.isForOfStatement(node);
 }
 
 function assignedSymbol(node: ts.Identifier | PropertyAccess, checker: ts.TypeChecker) {
@@ -193,10 +218,13 @@ function expressionSymbol(node: ts.Expression, checker: ts.TypeChecker) {
 }
 
 function referencedSymbol(node: ts.Expression, checker: ts.TypeChecker) {
-  if (ts.isElementAccessExpression(node)) {
-    return elementSymbol(node, checker);
-  }
-  return checker.getSymbolAtLocation(ts.isPropertyAccessExpression(node) ? node.name : node);
+  if (isPropertyAccess(node)) return propertySymbol(node, checker);
+  if (ts.isShorthandPropertyAssignment(node.parent)) return checker.getShorthandAssignmentValueSymbol(node.parent);
+  return checker.getSymbolAtLocation(node);
+}
+
+function propertySymbol(node: PropertyAccess, checker: ts.TypeChecker) {
+  return ts.isElementAccessExpression(node) ? elementSymbol(node, checker) : checker.getSymbolAtLocation(node.name);
 }
 
 function elementSymbol(node: ts.ElementAccessExpression, checker: ts.TypeChecker) {
@@ -224,23 +252,51 @@ function isWrittenOwner(node: ts.Expression, checker: ts.TypeChecker, written: R
   return isPropertyAccess(node) && isWrittenTarget(node.expression, checker, written);
 }
 
-function boundValue(node: ts.Expression, checker: ts.TypeChecker, written: ReadonlySet<ts.Symbol>, seen: Set<ts.Symbol>): ts.Node | undefined {
-  const expression = unwrapExpression(node);
-  if (ts.isIdentifier(expression)) return symbolValue(checker.getSymbolAtLocation(expression), checker, written, seen);
-  if (isPropertyAccess(expression)) return boundMemberValue(boundMembers(expression, checker, written, seen).at(-1), checker, written, seen);
-  return expression;
-}
+/** Each lookup owns its alias-cycle guard; independent calls never share visited bindings. */
+class BindingLookup {
+  private readonly seen = new Set<ts.Symbol>();
 
-function boundMemberValue(member: ts.Declaration | undefined, checker: ts.TypeChecker, written: ReadonlySet<ts.Symbol>, seen: Set<ts.Symbol>): ts.Node | undefined {
-  if (!member) return;
-  if (ts.isShorthandPropertyAssignment(member)) return symbolValue(checker.getShorthandAssignmentValueSymbol(member), checker, written, seen);
-  return declarationValue(member, checker, written, seen);
-}
+  constructor(private readonly checker: ts.TypeChecker, private readonly written: ReadonlySet<ts.Symbol>) {}
 
-function boundMembers(node: PropertyAccess, checker: ts.TypeChecker, written: ReadonlySet<ts.Symbol>, seen: Set<ts.Symbol>): readonly ts.Declaration[] {
-  const owner = boundValue(node.expression, checker, written, seen);
-  if (!owner) return [];
-  return propertyDeclarations(node, owner, checker);
+  resolveValue(node: ts.Expression): ts.Node | undefined {
+    const expression = unwrapExpression(node);
+    if (ts.isIdentifier(expression)) return this.symbolValue(this.checker.getSymbolAtLocation(expression));
+    if (isPropertyAccess(expression)) return this.memberValue(this.resolveMembers(expression).at(-1));
+    return expression;
+  }
+
+  private memberValue(member: ts.Declaration | undefined): ts.Node | undefined {
+    if (!member) return;
+    if (ts.isShorthandPropertyAssignment(member)) return this.symbolValue(this.checker.getShorthandAssignmentValueSymbol(member));
+    return this.declarationValue(member);
+  }
+
+  resolveMembers(node: PropertyAccess): readonly ts.Declaration[] {
+    const owner = this.resolveValue(node.expression);
+    if (!owner) return [];
+    return propertyDeclarations(node, owner, this.checker);
+  }
+
+  private symbolValue(symbol: ts.Symbol | undefined): ts.Node | undefined {
+    const resolved = resolveAlias(symbol, this.checker);
+    if (!this.canResolveSymbol(resolved)) return;
+    this.seen.add(resolved);
+    return this.declaredValue(resolved);
+  }
+
+  private canResolveSymbol(symbol: ts.Symbol | undefined): symbol is ts.Symbol {
+    return symbol !== undefined && !this.written.has(symbol) && !this.seen.has(symbol);
+  }
+
+  private declaredValue(symbol: ts.Symbol): ts.Node | undefined {
+    const declaration = symbol.valueDeclaration;
+    if (declaration) return this.declarationValue(declaration);
+  }
+
+  private declarationValue(node: ts.Declaration): ts.Node | undefined {
+    if (isInitializedDeclaration(node) || ts.isPropertyAssignment(node)) return this.resolveValue(node.initializer);
+    return node;
+  }
 }
 
 function propertyDeclarations(node: PropertyAccess, owner: ts.Node, checker: ts.TypeChecker) {
@@ -258,48 +314,7 @@ function accessName(node: PropertyAccess, checker: ts.TypeChecker) {
   return ts.isPropertyAccessExpression(node) ? node.name.text : constantKey(node.argumentExpression, checker);
 }
 
-function symbolValue(symbol: ts.Symbol | undefined, checker: ts.TypeChecker, written: ReadonlySet<ts.Symbol>, seen: Set<ts.Symbol>): ts.Node | undefined {
-  const resolved = resolveAlias(symbol, checker);
-  if (!canResolveSymbol(resolved, written, seen)) return;
-  seen.add(resolved);
-  return declaredValue(resolved, checker, written, seen);
-}
-
-function canResolveSymbol(symbol: ts.Symbol | undefined, written: ReadonlySet<ts.Symbol>, seen: ReadonlySet<ts.Symbol>): symbol is ts.Symbol {
-  return symbol !== undefined && !written.has(symbol) && !seen.has(symbol);
-}
-
-function declaredValue(symbol: ts.Symbol, checker: ts.TypeChecker, written: ReadonlySet<ts.Symbol>, seen: Set<ts.Symbol>): ts.Node | undefined {
-  const declaration = symbol.valueDeclaration;
-  if (declaration) return declarationValue(declaration, checker, written, seen);
-}
-
-function declarationValue(node: ts.Declaration, checker: ts.TypeChecker, written: ReadonlySet<ts.Symbol>, seen: Set<ts.Symbol>): ts.Node | undefined {
-  if (isInitializedDeclaration(node) || ts.isPropertyAssignment(node)) return boundValue(node.initializer, checker, written, seen);
-  return node;
-}
-
 function constantKey(node: ts.Expression, checker: ts.TypeChecker) {
   const type = checker.getTypeAtLocation(node);
   if (type.isStringLiteral() || type.isNumberLiteral()) return String(type.value);
-}
-
-function returnsTo(start: ts.SignatureDeclaration, graph: CallGraph) {
-  const pending = [...callTargets(start, graph)];
-  const seen = new Set<ts.SignatureDeclaration>();
-  for (const target of pending) {
-    if (target === start) return true;
-    enqueueUnseenTargets(target, graph, seen, pending);
-  }
-  return false;
-}
-
-function enqueueUnseenTargets(target: ts.SignatureDeclaration, graph: CallGraph, seen: Set<ts.SignatureDeclaration>, pending: ts.SignatureDeclaration[]) {
-  if (seen.has(target)) return;
-  seen.add(target);
-  pending.push(...callTargets(target, graph));
-}
-
-function callTargets(node: ts.SignatureDeclaration, graph: CallGraph) {
-  return graph.get(node) ?? [];
 }

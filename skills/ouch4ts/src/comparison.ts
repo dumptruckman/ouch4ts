@@ -56,7 +56,7 @@ function isOutsideRepository(path: string) {
 async function settingsFingerprint(options: ComparisonOptions, root: string) {
   const analyzer = createHash("sha256");
   const extension = extname(import.meta.url);
-  for (const file of ["index", "cognitive", "recursion", "syntax", "lcov", "project", "discovery", "files", "package-manager", "manifest", "process"]) {
+  for (const file of ["index", "cognitive", "recursion", "cycles", "syntax", "lcov", "project", "discovery", "files", "package-manager", "manifest", "process"]) {
     analyzer.update(await readFile(new URL(file + extension, import.meta.url)));
   }
   return createHash("sha256").update(JSON.stringify({

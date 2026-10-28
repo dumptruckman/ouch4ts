@@ -20,7 +20,7 @@ class CognitiveCounter {
       return;
     }
     this.complexity += controlFlowIncrement(node, nesting) + logicalIncrement(node, this.countedLogical);
-    const nested = nestedChildren(node);
+    const nested = childrenWithDeeperNesting(node);
     ts.forEachChild(node, child => {
       this.visit(child, nesting + Number(nested.includes(child)), functionDepth);
     });
@@ -145,7 +145,7 @@ function isNestingStructure(node: ts.Node) {
     ts.isCatchClause(node) || ts.isConditionalExpression(node);
 }
 
-function nestedChildren(node: ts.Node): readonly ts.Node[] {
+function childrenWithDeeperNesting(node: ts.Node): readonly ts.Node[] {
   if (ts.isIterationStatement(node, false)) return [node.statement];
   if (ts.isCaseBlock(node)) return node.clauses;
   return catchBody(node) ?? conditionalBranches(node);
@@ -158,10 +158,10 @@ function catchBody(node: ts.Node) {
 function conditionalBranches(node: ts.Node): readonly ts.Node[] {
   if (ts.isConditionalExpression(node)) return [node.whenTrue, node.whenFalse];
   if (!ts.isIfStatement(node)) return [];
-  return ifBranches(node);
+  return ifBranchesWithDeeperNesting(node);
 }
 
-function ifBranches(node: ts.IfStatement): readonly ts.Statement[] {
+function ifBranchesWithDeeperNesting(node: ts.IfStatement): readonly ts.Statement[] {
   return hasFinalElse(node) ? [node.thenStatement, node.elseStatement] : [node.thenStatement];
 }
 
@@ -199,8 +199,8 @@ function logicalSequenceCost(sequence: ts.BinaryExpression[]) {
   return complexity;
 }
 
-function logicalSequence(node: ts.Node): ts.BinaryExpression[] {
-  if (ts.isParenthesizedExpression(node)) return logicalSequence(node.expression);
+function logicalSequence(node: ts.Expression): ts.BinaryExpression[] {
+  node = unwrapExpression(node);
   if (!isBooleanLogicalExpression(node)) return [];
   return [...logicalSequence(node.left), node, ...logicalSequence(node.right)];
 }

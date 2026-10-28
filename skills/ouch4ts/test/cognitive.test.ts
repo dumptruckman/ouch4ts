@@ -66,6 +66,20 @@ test.each([
   expect(report.files[0]?.cognitive).toBe(cognitive);
 });
 
+test.each([
+  "a && ((b && c) as boolean)",
+  "a && ((b && c) satisfies boolean)",
+  "a && (b && c)!",
+  "a && <boolean>(b && c)",
+])("keeps one logical sequence through type-only syntax in %s", expression => {
+  const report = analyzeReport({
+    sources: [{ path: "src/logic.ts", text: `function sample() { return ${expression}; }` }],
+    lcov: "SF:src/logic.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(report.entries[0]).toMatchObject({ cognitive: 1, ouch: 4 });
+  expect(report.files[0]?.cognitive).toBe(1);
+});
+
 test("adds one whitepaper recursion point per function, regardless of call count", () => {
   const report = analyzeReport({
     sources: [{ path: "src/recursive.ts", text: "function repeat() { repeat(); repeat(); }" }],
@@ -87,6 +101,21 @@ test.each(["js", "ts"])("finds mutual recursion across .%s modules without charg
   expect(Object.fromEntries(report.entries.map(entry => [entry.name, entry.cognitive]))).toEqual({
     first: 1, second: 1, observer: 0,
   });
+});
+
+test("distinguishes connected recursion cycles from the calls between them", () => {
+  const report = analyzeReport({
+    sources: [{ path: "src/cycles.ts", text: `function first() { first(); bridge(); }
+function bridge() { second(); }
+function second() { last(); }
+function last() { second(); }
+function observer() { first(); second(); }` }],
+    lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(Object.fromEntries(report.entries.map(entry => [entry.name, entry.cognitive]))).toEqual({
+    first: 1, bridge: 0, second: 1, last: 1, observer: 0,
+  });
+  expect(report.files[0]?.cognitive).toBe(3);
 });
 
 test("resolves recursive methods and aliases without mistaking a shadowed function for recursion", () => {
@@ -149,6 +178,23 @@ test.each([
 });
 
 test.each([
+  "for (this.value of values) {}",
+  "for (this.value in values) {}",
+  "for ({ value: this.value } of values) {}",
+])("treats accessor loop targets as setter calls in %s", loop => {
+  const report = analyzeReport({
+    sources: [{ path: "src/accessor.ts", text: `class Box {
+  get value() { ${loop} return 0; }
+  set value(v) { ${loop} }
+}` }],
+    lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(Object.fromEntries(report.entries.map(entry => [entry.name, entry.cognitive]))).toEqual({
+    "Box.get value": 1, "Box.set value": 2,
+  });
+});
+
+test.each([
   "const repeat: () => number = () => repeat();",
   "let repeat: () => number = () => repeat();",
   "const obj: { repeat(): number } = { repeat() { return obj.repeat(); } };",
@@ -170,6 +216,36 @@ test.each([
     lcov: "SF:src/reassigned.ts\nDA:1,1\nend_of_record\n",
   });
   expect(report.entries.map(entry => entry.cognitive)).toEqual(cognitive);
+});
+
+test.each([
+  "({ target = repeat } = source)",
+  "({ [repeat()]: target } = source)",
+  "[target = repeat] = source",
+  "({ nested: [target = repeat] } = source)",
+])("preserves recursion when destructuring only reads the function in %s", assignment => {
+  const report = analyzeReport({
+    sources: [{ path: "src/destructuring.ts", text: `function repeat() { return repeat(); }
+let target;
+${assignment};` }],
+    lcov: "SF:src/destructuring.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "repeat")).toMatchObject({ cognitive: 1, ouch: 2 });
+  expect(report.files[0]?.cognitive).toBe(1);
+});
+
+test.each([
+  "for (repeat of replacements) {}",
+  "for (repeat in replacements) {}",
+  "for ([repeat] of replacements) {}",
+  "for ({ task: repeat } of replacements) {}",
+  "({ repeat = fallback } = source);",
+])("excludes recursion through a binding assigned by %s", assignment => {
+  const report = analyzeReport({
+    sources: [{ path: "src/reassigned.ts", text: `let repeat = () => repeat();\n${assignment}` }],
+    lcov: "SF:src/reassigned.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "repeat")).toMatchObject({ cognitive: 0, ouch: 1 });
 });
 
 test.each([
