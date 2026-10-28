@@ -283,6 +283,30 @@ test.each([
   expect(report.entries.find(entry => entry.name === "repeat")).toMatchObject({ complexity: 1, cognitive, ouch });
 });
 
+test.each([
+  { name: "a replacement member", declaration: "const overrides: { [key: string]: () => number } = { repeat: () => 0 };",
+    object: "{ repeat, ...overrides }", cognitive: 0, ouch: 1 },
+  { name: "a recursive member", declaration: "const overrides: { [key: string]: () => number } = { repeat };",
+    object: "{ repeat: () => 0, ...overrides }", cognitive: 1, ouch: 2 },
+  { name: "an unrelated member", declaration: "const overrides: { [key: string]: () => number } = { other: () => 0 };",
+    object: "{ repeat, ...overrides, ...overrides }", cognitive: 1, ouch: 2 },
+  { name: "an unresolved member", declaration: "declare const overrides: { [key: string]: () => number };",
+    object: "{ repeat, ...overrides }", cognitive: 0, ouch: 1 },
+])("resolves a dictionary spread with $name", ({ declaration, object, cognitive, ouch }) => {
+  const report = analyzeReport({
+    sources: [{ path: "src/properties.ts", text: `${declaration}
+function repeat() {
+  const obj = ${object};
+  return obj.repeat();
+}` }],
+    lcov: "SF:src/properties.ts\nDA:3,1\nDA:4,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "repeat" && entry.line === 2)).toMatchObject({
+    cognitive, crap: 1, ouch,
+  });
+  expect(report.files[0]?.cognitive).toBe(cognitive);
+});
+
 test("resolves element-access keys by value instead of the key variable's name", () => {
   const report = analyzeReport({
     sources: [{ path: "src/key.ts", text: `const key = 'other';

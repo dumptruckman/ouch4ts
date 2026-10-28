@@ -16,7 +16,12 @@ export function formatDelta(value: number | null) {
 }
 
 export function formatTable(title: string, rows: string[][], leftColumns = 2) {
-  const widths = rows[0]!.map((_, column) =>
+  const header = rows[0];
+  if (header === undefined) throw new Error("Table must include a header row");
+  if (rows.some(row => row.length !== header.length)) {
+    throw new Error("Table rows must match the header column count");
+  }
+  const widths = header.map((_, column) =>
     rows.reduce((width, row) => Math.max(width, row[column]!.length), 0)
   );
   const formatted = rows.map(row => {

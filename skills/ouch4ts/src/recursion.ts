@@ -254,9 +254,8 @@ function isWrittenOwner(node: ts.Expression, checker: ts.TypeChecker, written: R
 
 /** Each lookup owns its alias-cycle guard; independent calls never share visited bindings. */
 class BindingLookup {
-  private readonly seen = new Set<ts.Symbol>();
-
-  constructor(private readonly checker: ts.TypeChecker, private readonly written: ReadonlySet<ts.Symbol>) {}
+  constructor(private readonly checker: ts.TypeChecker, private readonly written: ReadonlySet<ts.Symbol>,
+    private readonly seen = new Set<ts.Symbol>()) {}
 
   resolveValue(node: ts.Expression): ts.Node | undefined {
     const expression = unwrapExpression(node);
@@ -274,7 +273,29 @@ class BindingLookup {
   resolveMembers(node: PropertyAccess): readonly ts.Declaration[] {
     const owner = this.resolveValue(node.expression);
     if (!owner) return [];
-    return propertyDeclarations(node, owner, this.checker);
+    if (!ts.isObjectLiteralExpression(owner)) return symbolDeclarations(expressionSymbol(node, this.checker));
+    const name = accessName(node, this.checker);
+    return name === undefined ? [] : this.objectMembers(owner, name) ?? [];
+  }
+
+  /** Undefined means absent; an empty list means a spread left the target unresolved. */
+  private objectMembers(owner: ts.ObjectLiteralExpression, name: string): readonly ts.Declaration[] | undefined {
+    const members = symbolDeclarations(this.checker.getTypeAtLocation(owner).getProperty(name));
+    for (const property of [...owner.properties].reverse()) {
+      if (members.includes(property)) return members;
+      if (ts.isSpreadAssignment(property)) {
+        const spreadMembers = this.spreadMembers(property.expression, name);
+        if (spreadMembers !== undefined) return spreadMembers;
+      }
+    }
+  }
+
+  private spreadMembers(expression: ts.Expression, name: string): readonly ts.Declaration[] | undefined {
+    const lookup = new BindingLookup(this.checker, this.written, new Set(this.seen));
+    const owner = lookup.resolveValue(expression);
+    if (!owner) return [];
+    if (ts.isObjectLiteralExpression(owner)) return lookup.objectMembers(owner, name);
+    return symbolDeclarations(this.checker.getTypeAtLocation(expression).getProperty(name));
   }
 
   private symbolValue(symbol: ts.Symbol | undefined): ts.Node | undefined {
@@ -297,17 +318,6 @@ class BindingLookup {
     if (isInitializedDeclaration(node) || ts.isPropertyAssignment(node)) return this.resolveValue(node.initializer);
     return node;
   }
-}
-
-function propertyDeclarations(node: PropertyAccess, owner: ts.Node, checker: ts.TypeChecker) {
-  if (ts.isObjectLiteralExpression(owner)) return objectMembers(owner, node, checker);
-  return symbolDeclarations(expressionSymbol(node, checker));
-}
-
-function objectMembers(owner: ts.ObjectLiteralExpression, node: PropertyAccess, checker: ts.TypeChecker) {
-  const name = accessName(node, checker);
-  if (name === undefined) return [];
-  return symbolDeclarations(checker.getTypeAtLocation(owner).getProperty(name));
 }
 
 function accessName(node: PropertyAccess, checker: ts.TypeChecker) {
