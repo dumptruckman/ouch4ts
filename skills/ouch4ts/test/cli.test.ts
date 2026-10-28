@@ -37,14 +37,14 @@ test("prints filtered file metrics and inclusive cognition while saving the comp
   const result = await run(cwd, "--use-existing-coverage", "nested");
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toMatch(/File complexity[\s\S]*src\/nested.ts\s+4\s+3\s+2/);
-  expect(result.stdout).toMatch(/outer\s+src\/nested.ts:1\s+2\s+1\s+2\s+100\.0%\s+2\.0\s+3\.0/);
+  expect(result.stdout).toMatch(/outer\s+src\/nested.ts:1\s+2\s+3\s+3\s+100\.0%\s+2\.0\s+5\.0/);
   expect(result.stdout).not.toContain("src/module.js");
   expect(JSON.parse(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8"))).toMatchObject({
     files: [
       { file: "src/nested.ts", complexity: 4, cognitive: 3, functions: 2 },
       { file: "src/module.js", complexity: 1, cognitive: 1, functions: 0 },
     ],
-    entries: [{ name: "outer", inclusiveCognitive: 2, crap: 2, ouch: 3 }, { name: "outer.inner", inclusiveCognitive: 1 }],
+    entries: [{ name: "outer", inclusiveCognitive: 3, crap: 2, ouch: 5 }, { name: "outer.inner", inclusiveCognitive: 1 }],
   });
 });
 
@@ -387,19 +387,19 @@ test("compares file metrics and inclusive cognitive changes even without functio
   expect(result.stdout).not.toContain("src/orders.ts");
   const report = JSON.parse(readFileSync(join(cwd, ".metrics/ouch-comparison.json"), "utf8"));
   expect(report.files).toEqual([
+    { file: "src/nested.ts", status: "changed",
+      base: { file: "src/nested.ts", complexity: 3, cognitive: 2, functions: 2 },
+      head: { file: "src/nested.ts", complexity: 4, cognitive: 5, functions: 2 },
+      delta: { complexity: 1, cognitive: 3, functions: 0 } },
     { file: "src/module.js", status: "changed",
       base: { file: "src/module.js", complexity: 1, cognitive: 1, functions: 0 },
       head: { file: "src/module.js", complexity: 2, cognitive: 3, functions: 0 },
       delta: { complexity: 1, cognitive: 2, functions: 0 } },
-    { file: "src/nested.ts", status: "changed",
-      base: { file: "src/nested.ts", complexity: 3, cognitive: 1, functions: 2 },
-      head: { file: "src/nested.ts", complexity: 4, cognitive: 3, functions: 2 },
-      delta: { complexity: 1, cognitive: 2, functions: 0 } },
   ]);
   expect(report.entries).toContainEqual(expect.objectContaining({
-    name: "outer", base: expect.objectContaining({ cognitive: 0, inclusiveCognitive: 1 }),
-    head: expect.objectContaining({ cognitive: 0, inclusiveCognitive: 3 }),
-    delta: { complexity: 0, cognitive: 0, inclusiveCognitive: 2, coverage: null, crap: null, ouch: null },
+    name: "outer", base: expect.objectContaining({ cognitive: 2, inclusiveCognitive: 2 }),
+    head: expect.objectContaining({ cognitive: 5, inclusiveCognitive: 5 }),
+    delta: { complexity: 0, cognitive: 3, inclusiveCognitive: 3, coverage: null, crap: null, ouch: null },
   }));
   const cached = await runComparison(cwd, "nested", "module");
   expect(cached.stdout).toBe(result.stdout);

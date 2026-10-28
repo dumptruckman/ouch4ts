@@ -1,116 +1,82 @@
 import ts from "typescript";
 
-/** Measure each function independently, keeping nested function bodies out of its score. */
-export function cognitiveComplexity(node: ts.FunctionLikeDeclaration) {
-  let complexity = 0;
-  let retainedNesting = 0;
-  const countedLogical = new Set<ts.BinaryExpression>();
-  function visit(child: ts.Node, nesting: number) {
-    if (ts.isFunctionLike(child)) {
-      // SonarJS retains enclosing-function nesting when a nesting branch is itself a function.
-      retainedNesting += Number(isNestingChild(child));
-      for (const expression of definitionExpressions(child)) visit(expression, nesting);
+/** Measure a function and its nested functions using the Cognitive Complexity whitepaper. */
+export function cognitiveComplexity(node: ts.FunctionLikeDeclaration, recursive: ReadonlySet<ts.SignatureDeclaration>) {
+  const counter = new CognitiveCounter(recursive);
+  counter.visitFunction(node, 0, 0);
+  return counter.complexity;
+}
+
+class CognitiveCounter {
+  complexity = 0;
+  private readonly countedLogical = new Set<ts.BinaryExpression>();
+
+  constructor(private readonly recursive: ReadonlySet<ts.SignatureDeclaration>) {}
+
+  visit(node: ts.Node, nesting: number, functionDepth: number) {
+    if (ts.isFunctionLike(node)) {
+      for (const expression of definitionExpressions(node)) this.visit(expression, nesting, functionDepth);
+      this.visitFunction(node, nesting, functionDepth);
       return;
     }
-    complexity += controlFlowIncrement(child, nesting + retainedNesting);
-    complexity += logicalIncrement(child, countedLogical);
-    const nested = nestedChildren(child);
-    ts.forEachChild(child, descendant => {
-      visit(descendant, nesting + Number(nested.includes(descendant)));
+    this.complexity += controlFlowIncrement(node, nesting) + logicalIncrement(node, this.countedLogical);
+    const nested = nestedChildren(node);
+    ts.forEachChild(node, child => {
+      this.visit(child, nesting + Number(nested.includes(child)), functionDepth);
     });
   }
-  for (const parameter of node.parameters) visit(parameter, 0);
-  if (node.body !== undefined) visit(node.body, 0);
-  return complexity;
-}
 
-function isNestingChild(node: ts.Node) {
-  let expression = node;
-  while (ts.isParenthesizedExpression(expression.parent)) expression = expression.parent;
-  return nestedChildren(expression.parent).includes(expression);
-}
-
-type FileFunction = {
-  own: number; nested: number; nestingPenalty: number; structural: boolean; componentName: boolean; returnsJsx: boolean;
-};
-
-/** SonarJS file metrics count module code and aggregate nested functions with their lexical nesting. */
-export function fileComplexity(source: ts.SourceFile) {
-  const visitor = new FileComplexityVisitor();
-  visitor.visit(source, 0, 0);
-  return visitor.metrics;
-}
-
-class FileComplexityVisitor {
-  readonly metrics = { complexity: 0, cognitive: 0, functions: 0 };
-  private readonly countedLogical = new Set<ts.BinaryExpression>();
-  private retainedNesting = 0;
-
-  visit(node: ts.Node, nesting: number, depth: number, top?: FileFunction) {
-    if (ts.isFunctionLike(node)) {
-      this.visitFunction(node, nesting, depth, top);
-      return;
-    }
-    if (fileDecisionKinds.has(node.kind) || isLogicalExpression(node)) this.metrics.complexity++;
-    const increment = controlFlowIncrement(node, nesting + this.retainedNesting) + logicalIncrement(node, this.countedLogical);
-    this.recordIncrement(node, increment, depth, top);
-    const nested = nestedChildren(node);
-    ts.forEachChild(node, child => this.visit(child, nesting + Number(nested.includes(child)), depth, top));
-  }
-
-  private visitFunction(node: ts.SignatureDeclaration, nesting: number, depth: number, top?: FileFunction) {
+  visitFunction(node: ts.SignatureDeclaration, nesting: number, functionDepth: number) {
     if (!("body" in node) || node.body === undefined) return;
-    for (const expression of definitionExpressions(node)) this.visit(expression, nesting, depth, top);
-    this.metrics.complexity++;
-    this.metrics.functions++;
-    const group = depth === 0 ? {
-      own: 0, nested: 0, nestingPenalty: 0, structural: false,
-      componentName: hasComponentName(node), returnsJsx: false,
-    } : top;
-    const functionNesting = nesting + Number(depth > 1);
-    for (const parameter of node.parameters) this.visit(parameter, functionNesting, depth + 1, group);
-    this.visit(node.body, functionNesting, depth + 1, group);
-    this.finishFunction(depth, group);
-    // At deeper function levels, SonarJS also retains this nesting in its file total.
-    if (depth > 1) this.retainedNesting += Number(isNestingChild(node));
-  }
-
-  private finishFunction(depth: number, group: FileFunction | undefined) {
-    if (depth !== 0 || !group) return;
-    const component = group.componentName && group.returnsJsx;
-    this.metrics.cognitive += group.own + group.nested + (group.structural && !component ? group.nestingPenalty : 0);
-  }
-
-  private recordIncrement(node: ts.Node, increment: number, depth: number, top: FileFunction | undefined) {
-    if (depth === 0) {
-      this.metrics.cognitive += increment;
-      return;
-    }
-    if (!top) return;
-    if (depth > 1) {
-      top.nested += increment;
-      top.nestingPenalty += Number(isStructural(node));
-      return;
-    }
-    top.own += increment;
-    top.structural ||= isStructural(node);
-    if (ts.isReturnStatement(node)) top.returnsJsx ||= isJsxReturn(node.expression);
+    this.complexity += Number(this.recursive.has(node));
+    const declarative = isDeclarativeFunction(node.body) && !node.parameters.some(hasStructuralCode);
+    const nested = nesting + Number(functionDepth > 0 && !declarative);
+    const depth = functionDepth + Number(!declarative);
+    for (const parameter of node.parameters) this.visit(parameter, nested, depth);
+    this.visit(node.body, nested, depth);
   }
 }
 
-function hasComponentName(node: ts.SignatureDeclaration) {
-  let parent = node.parent;
-  while (ts.isParenthesizedExpression(parent)) parent = parent.parent;
-  const name = (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name
-    ? node.name : ts.isVariableDeclaration(parent) ? parent.name : undefined;
-  if (name === undefined || !ts.isIdentifier(name)) return false;
-  return name.text[0] === name.text[0]?.toUpperCase();
+const declarationKinds = new Set([
+  ts.SyntaxKind.VariableStatement, ts.SyntaxKind.FunctionDeclaration, ts.SyntaxKind.ClassDeclaration,
+  ts.SyntaxKind.InterfaceDeclaration, ts.SyntaxKind.TypeAliasDeclaration, ts.SyntaxKind.EnumDeclaration,
+  ts.SyntaxKind.ModuleDeclaration,
+]);
+
+function isDeclarativeFunction(body: ts.ConciseBody) {
+  return ts.isBlock(body) && body.statements.every(isDeclaration) && !hasStructuralCode(body);
 }
 
-function isJsxReturn(expression: ts.Expression | undefined): boolean {
-  if (expression === undefined) return false;
-  if (ts.isParenthesizedExpression(expression)) return isJsxReturn(expression.expression);
-  return ts.isJsxElement(expression) || ts.isJsxSelfClosingElement(expression) || ts.isJsxFragment(expression);
+function isDeclaration(node: ts.Statement) {
+  if (declarationKinds.has(node.kind)) return true;
+  if (!ts.isExpressionStatement(node) || !ts.isBinaryExpression(node.expression)) return false;
+  if (node.expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
+  let value = node.expression.right;
+  while (ts.isParenthesizedExpression(value)) value = value.expression;
+  return ts.isFunctionExpression(value) || ts.isArrowFunction(value) || ts.isClassExpression(value);
+}
+
+function hasStructuralCode(node: ts.Node): boolean {
+  if (ts.isFunctionLike(node)) return definitionExpressions(node).some(hasStructuralCode);
+  return isStructural(node) || ts.forEachChild(node, hasStructuralCode) === true;
+}
+
+/** File cognitive complexity counts each syntax node once, including module-level code. */
+export function fileComplexity(source: ts.SourceFile, recursive: ReadonlySet<ts.SignatureDeclaration>) {
+  let complexity = 0;
+  let functions = 0;
+  function visit(node: ts.Node) {
+    if (ts.isFunctionLike(node) && "body" in node && node.body !== undefined) {
+      complexity++;
+      functions++;
+    }
+    if (fileDecisionKinds.has(node.kind) || isLogicalExpression(node)) complexity++;
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  const counter = new CognitiveCounter(recursive);
+  counter.visit(source, 0, 0);
+  return { complexity, cognitive: counter.complexity, functions };
 }
 
 const fileDecisionKinds = new Set([
@@ -124,7 +90,7 @@ function isStructural(node: ts.Node) {
   return isNestingStructure(node);
 }
 
-function definitionExpressions(node: ts.SignatureDeclaration) {
+export function definitionExpressions(node: ts.SignatureDeclaration) {
   if (!("body" in node) || node.body === undefined) return [];
   const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];
   return [...computedNameExpressions(node.name), ...decorators.map(decorator => decorator.expression)];
@@ -176,10 +142,10 @@ function isLogicalExpression(node: ts.Node): node is ts.BinaryExpression {
 }
 
 function logicalIncrement(node: ts.Node, counted: Set<ts.BinaryExpression>) {
-  if (!isLogicalExpression(node) || counted.has(node)) return 0;
+  if (!isLogicalExpression(node) || node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken || counted.has(node)) return 0;
   const sequence = logicalSequence(node);
   for (const expression of sequence) counted.add(expression);
-  return isJsxShortCircuit(node) ? 0 : logicalSequenceCost(sequence);
+  return logicalSequenceCost(sequence);
 }
 
 function logicalSequenceCost(sequence: ts.BinaryExpression[]) {
@@ -187,7 +153,7 @@ function logicalSequenceCost(sequence: ts.BinaryExpression[]) {
   let previous: ts.SyntaxKind | undefined;
   for (const expression of sequence) {
     const operator = expression.operatorToken.kind;
-    if (operator === ts.SyntaxKind.AmpersandAmpersandToken && operator !== previous) complexity++;
+    if (operator !== previous) complexity++;
     previous = operator;
   }
   return complexity;
@@ -195,19 +161,6 @@ function logicalSequenceCost(sequence: ts.BinaryExpression[]) {
 
 function logicalSequence(node: ts.Node): ts.BinaryExpression[] {
   if (ts.isParenthesizedExpression(node)) return logicalSequence(node.expression);
-  if (!isLogicalExpression(node)) return [];
+  if (!isLogicalExpression(node) || node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) return [];
   return [...logicalSequence(node.left), node, ...logicalSequence(node.right)];
-}
-
-function isJsxShortCircuit(node: ts.BinaryExpression) {
-  let parent = node.parent;
-  while (ts.isParenthesizedExpression(parent)) parent = parent.parent;
-  return ts.isJsxExpression(parent) && hasUniformLogicalOperator(node, node.operatorToken.kind);
-}
-
-function hasUniformLogicalOperator(node: ts.Node, operator: ts.SyntaxKind): boolean {
-  if (ts.isParenthesizedExpression(node)) return hasUniformLogicalOperator(node.expression, operator);
-  if (!isLogicalExpression(node)) return !ts.isConditionalExpression(node);
-  return node.operatorToken.kind === operator && hasUniformLogicalOperator(node.left, operator) &&
-    hasUniformLogicalOperator(node.right, operator);
 }

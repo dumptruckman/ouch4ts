@@ -56,7 +56,7 @@ test("scores JSX conditional rendering in JavaScript", () => {
   });
   expect(entries).toEqual([{
     name: "View", file: "src/view.jsx", line: 1, endLine: 3,
-    complexity: 2, cognitive: 0, inclusiveCognitive: 0, coverage: 100, crap: 2, ouch: 2,
+    complexity: 2, cognitive: 1, inclusiveCognitive: 1, coverage: 100, crap: 2, ouch: 3,
   }]);
 });
 
@@ -103,7 +103,7 @@ test("keeps an uncalled nested function's body out of its parent's line coverage
   });
   expect(entries.map(({ name, coverage, ouch }) => ({ name, coverage, ouch }))).toEqual([
     { name: "outer.inner", coverage: 0, ouch: 7 },
-    { name: "outer", coverage: 100, ouch: 1 },
+    { name: "outer", coverage: 100, ouch: 3 },
   ]);
 });
 
@@ -175,7 +175,7 @@ class Worker {
   expect(entries.map(entry => entry.name)).toEqual(names);
 });
 
-test("reports methods, arrows and callbacks separately, without charging nested decisions to parents", () => {
+test("reports methods, arrows and callbacks separately with independent CC and coverage", () => {
   const entries = analyze({
     sources: [{ path: "src/work.tsx", text: `
 class Worker {

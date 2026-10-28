@@ -1,6 +1,7 @@
-import { relative, resolve, sep } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 import { cognitiveComplexity, fileComplexity } from "./cognitive.js";
+import { recursiveFunctions } from "./recursion.js";
 
 export interface AnalysisOptions {
   sources: readonly { path: string; text: string }[];
@@ -13,40 +14,62 @@ export function analyze({ sources, lcov, projectRoot = process.cwd() }: Analysis
   return analyzeReport({ sources, lcov, projectRoot }).entries;
 }
 
-/** Return function scores and SonarJS file metrics from the same parsed sources. */
+/** Return function and file scores from the same parsed sources. */
 export function analyzeReport({ sources, lcov, projectRoot = process.cwd() }: AnalysisOptions) {
   const coverage = readLcov(lcov, projectRoot);
+  const { program, parsed } = parseSources(sources, projectRoot);
+  const recursive = recursiveFunctions(parsed.map(entry => entry.source), program.getTypeChecker());
   const files: { file: string; complexity: number; cognitive: number; functions: number }[] = [];
-  const entries = sources.flatMap(({ path, text }) => {
-    const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
-    const options = { noResolve: true, noLib: true, allowJs: true };
-    const program = ts.createProgram([path], options, {
-      ...ts.createCompilerHost(options),
-      getSourceFile: file => resolve(file) === resolve(path) ? source : undefined,
-    });
-    const [error] = program.getSyntacticDiagnostics(source);
-    if (error) throw new Error(`${path}: syntax error: ${ts.flattenDiagnosticMessageText(error.messageText, " ")}`);
+  const entries = parsed.flatMap(({ path, source }) => {
     const entries: ReturnType<typeof scoreFunction>[] = [];
     const lines = coverage.get(resolve(projectRoot, path));
-    files.push({ file: relative(projectRoot, resolve(projectRoot, path)).split(sep).join("/"), ...fileComplexity(source) });
-    function visit(node: ts.Node, scope = ""): number {
+    files.push({ file: relative(projectRoot, resolve(projectRoot, path)).split(sep).join("/"), ...fileComplexity(source, recursive) });
+    function visit(node: ts.Node, scope = "") {
       if (isRuntimeFunction(node)) {
         const name = scope + functionName(node, source);
-        const entry = scoreFunction(node, source, lines, name, projectRoot);
+        const entry = scoreFunction(node, source, lines, name, projectRoot, recursive);
         entries.push(entry);
-        ts.forEachChild(node, child => { entry.inclusiveCognitive += visit(child, name + "."); });
-        return entry.inclusiveCognitive;
+        ts.forEachChild(node, child => visit(child, name + "."));
+        return;
       }
       const container = className(node);
-      let nestedCognitive = 0;
-      ts.forEachChild(node, child => { nestedCognitive += visit(child, container ? scope + container + "." : scope); });
-      return nestedCognitive;
+      ts.forEachChild(node, child => visit(child, container ? scope + container + "." : scope));
     }
     visit(source);
     return entries;
   }).sort((a, b) => (b.ouch ?? -1) - (a.ouch ?? -1) || a.file.localeCompare(b.file) || a.line - b.line);
   files.sort((a, b) => b.cognitive - a.cognitive || a.file.localeCompare(b.file));
   return { entries, files };
+}
+
+function parseSources(sources: AnalysisOptions["sources"], root: string) {
+  const parsed = sources.map(({ path, text }) => ({
+    path, source: ts.createSourceFile(resolve(root, path), text, ts.ScriptTarget.Latest, true),
+  }));
+  const byPath = new Map(parsed.map(({ source }) => [source.fileName, source]));
+  const directories = new Set<string>();
+  for (const path of byPath.keys()) {
+    for (let directory = dirname(path); !directories.has(directory); directory = dirname(directory)) directories.add(directory);
+  }
+  const options = {
+    noLib: true, allowJs: true, types: [],
+    module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
+  };
+  const program = ts.createProgram([...byPath.keys()], options, {
+    ...ts.createCompilerHost(options),
+    getCurrentDirectory: () => resolve(root),
+    getSourceFile: file => byPath.get(resolve(root, file)),
+    fileExists: file => byPath.has(resolve(root, file)),
+    readFile: file => byPath.get(resolve(root, file))?.text,
+    directoryExists: directory => directories.has(resolve(root, directory)),
+    getDirectories: () => [],
+    realpath: file => resolve(root, file),
+  });
+  for (const { path, source } of parsed) {
+    const [error] = program.getSyntacticDiagnostics(source);
+    if (error) throw new Error(`${path}: syntax error: ${ts.flattenDiagnosticMessageText(error.messageText, " ")}`);
+  }
+  return { program, parsed };
 }
 
 function className(node: ts.Node) {
@@ -92,12 +115,12 @@ function assignedFunctionName(node: RuntimeFunction, source: ts.SourceFile) {
 }
 
 function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<number, number> | undefined,
-  name: string, root: string) {
+  name: string, root: string, recursive: ReadonlySet<ts.SignatureDeclaration>) {
   const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
   const endLine = source.getLineAndCharacterOfPosition(node.end - 1).line + 1;
   const { complexity, range, nestedRanges } = functionStructure(node, source);
   const fraction = functionCoverage(lines, range, nestedRanges);
-  const cognitive = cognitiveComplexity(node);
+  const cognitive = cognitiveComplexity(node, recursive);
   const crap = fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity;
   return {
     name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity, cognitive,

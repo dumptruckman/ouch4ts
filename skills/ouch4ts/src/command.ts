@@ -38,7 +38,7 @@ export async function runCli(args: string[], cwd: string) {
   -h, --help                Show this help
 
 File tables sort by cognitive complexity or its delta. Function tables sort by OUCH or its delta.
-File metrics follow SonarJS. Function Cog incl includes nested functions; CRAP and OUCH use own scores.
+Cog follows the Cognitive Complexity whitepaper and includes nested functions. Cog incl repeats Cog for compatibility.
 OUCH means Overall Upkeep and Change Hassle, derived from CRAP.
 CRAP combines cyclomatic complexity and line coverage; OUCH adds cognitive complexity.
 Path fragments filter the table. Normal reports write .metrics/ouch.json;

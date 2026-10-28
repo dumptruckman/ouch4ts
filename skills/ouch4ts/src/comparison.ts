@@ -51,7 +51,7 @@ async function comparisonPaths(options: ComparisonOptions, root: string) {
 async function settingsFingerprint(options: ComparisonOptions, root: string) {
   const analyzer = createHash("sha256");
   const extension = extname(import.meta.url);
-  for (const file of ["index", "cognitive", "project", "files", "package-manager"]) {
+  for (const file of ["index", "cognitive", "recursion", "project", "files", "package-manager"]) {
     analyzer.update(await readFile(new URL(file + extension, import.meta.url)));
   }
   return createHash("sha256").update(JSON.stringify({
