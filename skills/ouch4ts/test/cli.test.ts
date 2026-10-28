@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -496,6 +496,33 @@ test("compare reuses commit reports until refresh is requested", async () => {
   const refreshed = await runComparison(cwd, "--refresh");
   expect(refreshed.status, refreshed.stderr).toBe(0);
   expect(readFileSync(join(cwd, "calls.log"), "utf8").trim().split("\n")).toHaveLength(8);
+});
+
+test("comparison cache tracks added and edited analyzer implementation files", () => {
+  const cwd = comparisonProject();
+  const analyzer = project({ "package.json": '{"type":"module"}' });
+  cpSync(join(root, "dist"), join(analyzer, "dist"), { recursive: true });
+  const nodeModules = dirname(dirname(fileURLToPath(import.meta.resolve("typescript/package.json"))));
+  symlinkSync(nodeModules, join(analyzer, "node_modules"), "dir");
+  const compare = () => spawnSync(process.execPath, [join(analyzer, "dist/cli.js"), "--compare", "base",
+    "--setup-command", "node setup.cjs", "--coverage-command", "node cover.cjs"], { cwd, encoding: "utf8" });
+  const first = compare();
+  expect(first.status, first.stderr).toBe(0);
+
+  const implementation = join(analyzer, "dist/helpers/extra.js");
+  mkdirSync(dirname(implementation));
+  writeFileSync(implementation, "export const version = 1;\n");
+  const added = compare();
+  expect(added.status, added.stderr).toBe(0);
+  expect(added.stderr.match(/Analyzing /g)).toHaveLength(2);
+
+  writeFileSync(implementation, "export const version = 2;\n");
+  const edited = compare();
+  expect(edited.status, edited.stderr).toBe(0);
+  expect(edited.stderr.match(/Analyzing /g)).toHaveLength(2);
+  const unchanged = compare();
+  expect(unchanged.status, unchanged.stderr).toBe(0);
+  expect(unchanged.stderr.match(/Using cached report/g)).toHaveLength(2);
 });
 
 test("comparison exclusions use project-relative paths and separate reusable caches", async () => {

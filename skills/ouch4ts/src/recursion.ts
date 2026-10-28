@@ -280,14 +280,21 @@ class BindingLookup {
 
   /** Undefined means absent; an empty list means a spread left the target unresolved. */
   private objectMembers(owner: ts.ObjectLiteralExpression, name: string): readonly ts.Declaration[] | undefined {
-    const members = symbolDeclarations(this.checker.getTypeAtLocation(owner).getProperty(name));
+    const accessors: ts.Declaration[] = [];
+    let members: readonly ts.Declaration[] | undefined;
     for (const property of [...owner.properties].reverse()) {
-      if (members.includes(property)) return members;
       if (ts.isSpreadAssignment(property)) {
-        const spreadMembers = this.spreadMembers(property.expression, name);
-        if (spreadMembers !== undefined) return spreadMembers;
+        members = this.spreadMembers(property.expression, name);
+        if (members !== undefined) break;
+      } else if (propertyName(property.name, this.checker) === name) {
+        if (!isAccessor(property)) {
+          members = [property];
+          break;
+        }
+        if (!accessors.some(accessor => accessor.kind === property.kind)) accessors.push(property);
       }
     }
+    return accessors.length ? accessors : members;
   }
 
   private spreadMembers(expression: ts.Expression, name: string): readonly ts.Declaration[] | undefined {
@@ -322,6 +329,10 @@ class BindingLookup {
 
 function accessName(node: PropertyAccess, checker: ts.TypeChecker) {
   return ts.isPropertyAccessExpression(node) ? node.name.text : constantKey(node.argumentExpression, checker);
+}
+
+function propertyName(name: ts.PropertyName, checker: ts.TypeChecker) {
+  return ts.isComputedPropertyName(name) ? constantKey(name.expression, checker) : name.text;
 }
 
 function constantKey(node: ts.Expression, checker: ts.TypeChecker) {

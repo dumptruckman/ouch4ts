@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { readCache, writeCache } from "./cache.js";
 import { canonicalPath } from "./files.js";
@@ -55,9 +56,13 @@ function isOutsideRepository(path: string) {
 
 async function settingsFingerprint(options: ComparisonOptions, root: string) {
   const analyzer = createHash("sha256");
+  const directory = fileURLToPath(new URL("./", import.meta.url));
   const extension = extname(import.meta.url);
-  for (const file of ["index", "cognitive", "recursion", "cycles", "syntax", "lcov", "project", "discovery", "files", "package-manager", "manifest", "process"]) {
-    analyzer.update(await readFile(new URL(file + extension, import.meta.url)));
+  const files = (await readdir(directory, { recursive: true, withFileTypes: true }))
+    .filter(file => file.isFile() && extname(file.name) === extension)
+    .map(file => relative(directory, join(file.parentPath, file.name))).sort();
+  for (const file of files) {
+    analyzer.update(JSON.stringify([file, await readFile(join(directory, file), "utf8")]));
   }
   return createHash("sha256").update(JSON.stringify({
     version: 3, analyzer: analyzer.digest("hex"), typescript: ts.version,

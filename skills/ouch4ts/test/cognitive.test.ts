@@ -54,6 +54,18 @@ function namespace() {
 });
 
 test.each([
+  { name: "parentheses around the assignment", assignment: "(holder.run = function () { if (ready) work(); })" },
+  { name: "a type assertion around the assignment", assignment: "(holder.run = function () { if (ready) work(); }) as Handler" },
+])("preserves declaration-wrapper scores with $name", ({ assignment }) => {
+  const report = analyzeReport({
+    sources: [{ path: "src/namespace.ts", text: `function namespace() { ${assignment}; }` }],
+    lcov: "SF:src/namespace.ts\nDA:1,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "namespace")).toMatchObject({ cognitive: 1 });
+  expect(report.files[0]?.cognitive).toBe(1);
+});
+
+test.each([
   { expression: "a || b", cognitive: 1 },
   { expression: "a && b || c && d", cognitive: 3 },
   { expression: "<div>{a && b && <span />}</div>", cognitive: 1 },
@@ -304,6 +316,27 @@ function repeat() {
   expect(report.entries.find(entry => entry.name === "repeat" && entry.line === 2)).toMatchObject({
     cognitive, crap: 1, ouch,
   });
+  expect(report.files[0]?.cognitive).toBe(cognitive);
+});
+
+test.each([
+  { name: "a getter replaced by data", properties: "get value() { return repeat(); }, value: 0", use: "return obj.value;", cognitive: 0 },
+  { name: "a setter replaced by data", properties: "set value(v) { repeat(); }, value: 0", use: "obj.value = 1;", cognitive: 0 },
+  { name: "a getter/setter pair replacing data", properties: "value: 0, get value() { return repeat(); }, set value(v) {}",
+    use: "return obj.value;", cognitive: 2 },
+  { name: "a getter replaced by another getter", properties: "get value() { return repeat(); }, get value() { return 0; }",
+    use: "return obj.value;", cognitive: 0 },
+  { name: "data separating a getter and setter", properties: "get value() { return repeat(); }, value: 0, set value(v) {}",
+    use: "return obj.value;", cognitive: 0 },
+])("resolves accessor recursion after $name", ({ properties, use, cognitive }) => {
+  const report = analyzeReport({
+    sources: [{ path: "src/accessors.js", text: `function repeat() {
+  const obj = { ${properties} };
+  ${use}
+}` }],
+    lcov: "SF:src/other.js\nDA:1,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "repeat")?.cognitive).toBe(cognitive);
   expect(report.files[0]?.cognitive).toBe(cognitive);
 });
 

@@ -67,6 +67,7 @@ function isDeclaration(node: ts.Statement) {
 }
 
 function isDefinitionAssignment(node: ts.Expression) {
+  node = unwrapExpression(node);
   if (!isSimpleAssignment(node)) return false;
   const value = unwrapExpression(node.right);
   return definitionKinds.has(value.kind);
