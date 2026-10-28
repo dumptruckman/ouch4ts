@@ -13,7 +13,7 @@ test("includes callback nesting in the enclosing function's whitepaper score and
     lcov: "SF:src/callback.ts\nDA:2,1\nDA:3,1\nDA:4,1\nDA:6,1\nend_of_record\n",
   });
   expect(report.entries.find(entry => entry.name === "outer")).toMatchObject({
-    complexity: 1, cognitive: 2, inclusiveCognitive: 2, coverage: 100, crap: 1, ouch: 3,
+    complexity: 1, cognitive: 2, coverage: 100, crap: 1, ouch: 3,
   });
   expect(report.files).toEqual([{ file: "src/callback.ts", complexity: 3, cognitive: 2, functions: 2 }]);
 });
@@ -29,7 +29,7 @@ test("applies the whitepaper's JavaScript declaration-wrapper exception", () => 
     lcov: "SF:src/other.js\nDA:1,1\nend_of_record\n",
   });
   expect(report.entries.find(entry => entry.name === "namespace")).toMatchObject({
-    cognitive: 1, inclusiveCognitive: 1,
+    cognitive: 1,
   });
   expect(report.files).toEqual([{ file: "src/namespace.js", complexity: 3, cognitive: 1, functions: 2 }]);
 });
@@ -43,7 +43,7 @@ test.each([
     sources: [{ path: "src/logic.tsx", text: `function sample() { return ${expression}; }` }],
     lcov: "SF:src/logic.tsx\nDA:1,1\nend_of_record\n",
   });
-  expect(report.entries[0]).toMatchObject({ cognitive, inclusiveCognitive: cognitive });
+  expect(report.entries[0]).toMatchObject({ cognitive });
   expect(report.files[0]?.cognitive).toBe(cognitive);
 });
 
@@ -52,7 +52,7 @@ test("adds one whitepaper recursion point per function, regardless of call count
     sources: [{ path: "src/recursive.ts", text: "function repeat() { repeat(); repeat(); }" }],
     lcov: "SF:src/recursive.ts\nDA:1,1\nend_of_record\n",
   });
-  expect(report.entries[0]).toMatchObject({ cognitive: 1, inclusiveCognitive: 1, crap: 1, ouch: 2 });
+  expect(report.entries[0]).toMatchObject({ cognitive: 1, crap: 1, ouch: 2 });
   expect(report.files).toEqual([{ file: "src/recursive.ts", complexity: 1, cognitive: 1, functions: 1 }]);
 });
 
@@ -100,7 +100,7 @@ test.each([
     sources: [{ path: "src/recursive.ts", text }],
     lcov: "SF:src/recursive.ts\nDA:1,1\nend_of_record\n",
   });
-  expect(report.entries[0]).toMatchObject({ cognitive: 1, inclusiveCognitive: 1, ouch: 2 });
+  expect(report.entries[0]).toMatchObject({ cognitive: 1, ouch: 2 });
 });
 
 test.each([
@@ -112,7 +112,7 @@ test.each([
     sources: [{ path: "src/accessor.ts", text }],
     lcov: "SF:src/accessor.ts\nDA:1,1\nend_of_record\n",
   });
-  expect(report.entries[0]).toMatchObject({ cognitive: 1, inclusiveCognitive: 1, ouch: 2 });
+  expect(report.entries[0]).toMatchObject({ cognitive: 1, ouch: 2 });
 });
 
 test.each([
@@ -125,7 +125,7 @@ test.each([
     sources: [{ path: "src/typed.ts", text }],
     lcov: "SF:src/typed.ts\nDA:1,1\nend_of_record\n",
   });
-  expect(report.entries[0]).toMatchObject({ cognitive: 1, inclusiveCognitive: 1, ouch: 2 });
+  expect(report.entries[0]).toMatchObject({ cognitive: 1, ouch: 2 });
 });
 
 test.each([
@@ -188,8 +188,8 @@ test("includes nested function decisions in whitepaper cognitive scores while ke
   expect(report).toMatchObject({
     files: [{ file: "src/nested.ts", complexity: 4, cognitive: 3, functions: 2 }],
     entries: [
-      { name: "outer", complexity: 2, cognitive: 3, inclusiveCognitive: 3, crap: 2, ouch: 5 },
-      { name: "outer.inner", complexity: 2, cognitive: 1, inclusiveCognitive: 1, crap: 2, ouch: 3 },
+      { name: "outer", complexity: 2, cognitive: 3, crap: 2, ouch: 5 },
+      { name: "outer.inner", complexity: 2, cognitive: 1, crap: 2, ouch: 3 },
     ],
   });
 });
@@ -210,7 +210,7 @@ test.each([
     lcov: "SF:src/branch.ts\nDA:2,1\nDA:3,1\nend_of_record\n",
   });
   expect(report.entries.find(entry => entry.name === "sample")).toMatchObject({
-    complexity: 3, cognitive, inclusiveCognitive: cognitive, crap: 3, ouch,
+    complexity: 3, cognitive, crap: 3, ouch,
   });
   expect(report.files).toEqual([{ file: "src/branch.ts", complexity: fileComplexity, cognitive: 2, functions }]);
 });
@@ -244,7 +244,7 @@ test.each([
     lcov: "SF:src/other.ts\nDA:1,1\nend_of_record\n",
   });
   expect(report.entries.find(entry => entry.name === "outer.middle")).toMatchObject({
-    cognitive, inclusiveCognitive: cognitive,
+    cognitive,
   });
   expect(report.files).toEqual([{ file: path, complexity: 6, cognitive: fileCognitive, functions: 3 }]);
 });

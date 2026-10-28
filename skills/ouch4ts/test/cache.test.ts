@@ -7,7 +7,7 @@ import { readCache, writeCache } from "../src/cache.js";
 const directories: string[] = [];
 const metric = {
   name: "price", file: "src/orders.ts", line: 1, endLine: 4,
-  complexity: 2, cognitive: 1, inclusiveCognitive: 1, coverage: 50, crap: 2.5, ouch: 3.5,
+  complexity: 2, cognitive: 1, coverage: 50, crap: 2.5, ouch: 3.5,
 };
 const fileMetric = { file: "src/orders.ts", complexity: 2, cognitive: 1, functions: 1 };
 
@@ -21,7 +21,7 @@ async function cachePath() {
   return join(directory, "report.json");
 }
 
-test("caches file metrics together with inclusive function scores", async () => {
+test("caches file metrics together with function scores", async () => {
   const path = await cachePath();
   const report = { entries: [metric], files: [fileMetric] };
   await writeCache(path, "commit", "settings", report);
@@ -62,8 +62,6 @@ test.each([
     { name: "missing cognitive complexity", entry: { ...metric, cognitive: undefined } },
     { name: "negative cognitive complexity", entry: { ...metric, cognitive: -1 } },
     { name: "fractional cognitive complexity", entry: { ...metric, cognitive: 0.5 } },
-    { name: "missing inclusive cognitive complexity", entry: { ...metric, inclusiveCognitive: undefined } },
-    { name: "inclusive complexity below own complexity", entry: { ...metric, inclusiveCognitive: 0 } },
     { name: "out-of-range coverage", entry: { ...metric, coverage: 101 } },
     { name: "missing CRAP score", entry: { ...metric, crap: undefined } },
     { name: "null CRAP score with known coverage", entry: { ...metric, crap: null } },

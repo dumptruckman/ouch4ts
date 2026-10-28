@@ -46,8 +46,7 @@ function isMetric(value: unknown): value is Metric {
 }
 
 function hasComplexities(value: Record<string, unknown>) {
-  return isIntegerAtLeast(value.complexity, 1) && isIntegerAtLeast(value.cognitive, 0)
-    && isIntegerAtLeast(value.inclusiveCognitive, value.cognitive);
+  return isIntegerAtLeast(value.complexity, 1) && isIntegerAtLeast(value.cognitive, 0);
 }
 
 function isFileMetric(value: unknown): value is Report["files"][number] {

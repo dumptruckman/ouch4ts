@@ -18,7 +18,7 @@ Coverage is a fraction from 0 to 1 in the formula and a percentage in reports. A
 
 Tables show `CRAP` and `OUCH`; JSON reports contain `crap` and `ouch`. Both scores are `null` in JSON and `N/A` in tables when coverage is indeterminate. Cyclomatic complexity in `complexity` and cognitive complexity in `cognitive`, a nonnegative integer, remain available. Current reports sort by OUCH.
 
-Function `Cog`, JSON `cognitive`, includes nested functions and callbacks with the whitepaper's nesting penalties. `Cog incl`, JSON `inclusiveCognitive`, repeats that value for compatibility with existing reports. Nested scores are already included and are not added again. CRAP still uses independent function cyclomatic complexity and line coverage; OUCH adds the full cognitive score.
+Function `Cog`, JSON `cognitive`, includes nested functions and callbacks with the whitepaper's nesting penalties. Nested scores are already included and are not added again. CRAP still uses independent function cyclomatic complexity and line coverage; OUCH adds the full cognitive score.
 
 ## File complexity
 
@@ -28,7 +28,7 @@ File cyclomatic complexity follows SonarJS's [file syntax counter](https://githu
 - File `Cog` traverses module code and function bodies once, preserving control-flow and nested-function depth. Top-level functions add no function-nesting increment. JavaScript declaration wrappers receive the whitepaper's Appendix A exception. React components and JSX receive the same rules as other functions and expressions.
 - `Functions` counts all functions with bodies, including nested callbacks. Signatures and ambient declarations are excluded. Files without functions still appear.
 
-Normal JSON reports contain `entries` for functions and `files` for file metrics. Each file metric has `file`, `complexity`, `cognitive`, and `functions`. File rows sort by descending cognitive complexity, then path. File metrics are independent of coverage and remain numeric when function scores are `N/A`. They are contextual measures of file complexity; file size and function count affect their interpretation. They do not represent a file-level CRAP or OUCH score, and summing inclusive function scores would double-count nested code.
+Normal JSON reports contain `entries` for functions and `files` for file metrics. Each file metric has `file`, `complexity`, `cognitive`, and `functions`. File rows sort by descending cognitive complexity, then path. File metrics are independent of coverage and remain numeric when function scores are `N/A`. They are contextual measures of file complexity; file size and function count affect their interpretation. They do not represent a file-level CRAP or OUCH score, and summing function cognitive scores would double-count nested code.
 
 ## Source discovery and cyclomatic complexity
 

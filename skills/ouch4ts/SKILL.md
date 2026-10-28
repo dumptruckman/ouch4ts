@@ -33,7 +33,7 @@ Replace `/path/to/ouch4ts` with the resolved skill directory. Use `--help` for o
 
 ## Interpret the result
 
-Start with the largest file cognitive scores or increases, then report CRAP alongside the largest function OUCH scores and increases, with locations. Cognitive scores follow the [whitepaper rules](references/measurement.md#cognitive-complexity), including nested-function depth and recursion cycles. Function `Cog incl` repeats `Cog` for compatibility. Use independent function `CC` and coverage to explain CRAP; OUCH adds the full `Cog`. Full coverage leaves CRAP at `CC` and OUCH at `CC + Cog`. Calibrate limits against representative project code.
+Start with the largest file cognitive scores or increases, then report CRAP alongside the largest function OUCH scores and increases, with locations. Cognitive scores follow the [whitepaper rules](references/measurement.md#cognitive-complexity), including nested-function depth and recursion cycles. Use independent function `CC` and coverage to explain CRAP; OUCH adds the full `Cog`. Full coverage leaves CRAP at `CC` and OUCH at `CC + Cog`. Calibrate limits against representative project code.
 
 For successful comparisons, state whether each distinct commit's report was reused from cache or regenerated, using the diagnostics described in [cache and output](references/comparison.md#cache-and-output).
 

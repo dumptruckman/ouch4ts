@@ -124,7 +124,6 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
   const crap = fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity;
   return {
     name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity, cognitive,
-    inclusiveCognitive: cognitive,
     coverage: fraction === null ? null : fraction * 100,
     crap,
     ouch: crap === null ? null : crap + cognitive,

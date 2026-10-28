@@ -38,7 +38,7 @@ export async function runCli(args: string[], cwd: string) {
   -h, --help                Show this help
 
 File tables sort by cognitive complexity or its delta. Function tables sort by OUCH or its delta.
-Cog follows the Cognitive Complexity whitepaper and includes nested functions. Cog incl repeats Cog for compatibility.
+Cog follows the Cognitive Complexity whitepaper and includes nested functions.
 OUCH means Overall Upkeep and Change Hassle, derived from CRAP.
 CRAP combines cyclomatic complexity and line coverage; OUCH adds cognitive complexity.
 Path fragments filter the table. Normal reports write .metrics/ouch.json;
@@ -80,8 +80,8 @@ function formatFiles(files: Awaited<ReturnType<typeof analyzeProject>>["files"])
 }
 
 function formatReport(entries: Awaited<ReturnType<typeof analyzeProject>>["entries"]) {
-  const rows = [["Function", "File", "CC", "Cog", "Cog incl", "Cov%", "CRAP", "OUCH"], ...entries.map(entry => [
-    entry.name, `${entry.file}:${entry.line}`, String(entry.complexity), String(entry.cognitive), String(entry.inclusiveCognitive),
+  const rows = [["Function", "File", "CC", "Cog", "Cov%", "CRAP", "OUCH"], ...entries.map(entry => [
+    entry.name, `${entry.file}:${entry.line}`, String(entry.complexity), String(entry.cognitive),
     entry.coverage === null ? "N/A" : entry.coverage.toFixed(1) + "%",
     entry.crap === null ? "N/A" : entry.crap.toFixed(1),
     entry.ouch === null ? "N/A" : entry.ouch.toFixed(1),
@@ -92,11 +92,10 @@ function formatReport(entries: Awaited<ReturnType<typeof analyzeProject>>["entri
 type Metric = Awaited<ReturnType<typeof analyzeProject>>["entries"][number];
 
 function formatComparison(entries: Awaited<ReturnType<typeof compareProject>>["entries"]) {
-  const rows = [["Function", "File", "CC base/head", "Cog base/head", "Cog incl base/head", "Cov% base/head",
+  const rows = [["Function", "File", "CC base/head", "Cog base/head", "Cov% base/head",
     "CRAP base", "CRAP head", "CRAP delta", "OUCH base", "OUCH head", "Delta", "Status"],
     ...entries.map(entry => [entry.name, entry.file,
       formatPair(entry.base?.complexity, entry.head?.complexity), formatPair(entry.base?.cognitive, entry.head?.cognitive),
-      formatPair(entry.base?.inclusiveCognitive, entry.head?.inclusiveCognitive),
       `${sideScore(entry.base, "coverage")} / ${sideScore(entry.head, "coverage")}`,
       sideScore(entry.base, "crap"), sideScore(entry.head, "crap"), formatDelta(entry.delta.crap),
       sideScore(entry.base, "ouch"), sideScore(entry.head, "ouch"), formatDelta(entry.delta.ouch), entry.status,
