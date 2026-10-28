@@ -171,25 +171,24 @@ function sameScores(base: Metric | null, head: Metric | null) {
 function comparisonEntry(base: Metric | null, head: Metric | null) {
   const entry = head ?? base;
   if (!entry) return null;
-  if (unchangedEntry(base, head)) return null;
+  if (unchangedEntry(base, head, scoreFields)) return null;
   return {
     name: entry.name, file: entry.file, status: comparisonStatus(base, head, sameScores(base, head)), base, head,
     delta: metricDeltas(base, head),
   };
 }
 
-function unchangedEntry(base: Metric | null, head: Metric | null) {
-  return sameScores(base, head) && base?.file === head?.file;
+function unchangedEntry<T extends { file: string }>(base: T | null, head: T | null, fields: readonly (keyof T)[]) {
+  return sameFieldValues(base, head, fields) && base?.file === head?.file;
 }
 
-function comparisonStatus(base: object | null, head: object | null, same: boolean) {
+function comparisonStatus(base: object | null, head: object | null, scoresUnchanged: boolean) {
+  return unmatchedEntryStatus(base, head) ?? (scoresUnchanged ? "renamed" : "changed");
+}
+
+function unmatchedEntryStatus(base: object | null, head: object | null) {
   if (base === null) return "added";
   if (head === null) return "removed";
-  return matchedEntryStatus(same);
-}
-
-function matchedEntryStatus(scoresUnchanged: boolean) {
-  return scoresUnchanged ? "renamed" : "changed";
 }
 
 function metricDeltas(base: Metric | null, head: Metric | null) {
@@ -248,7 +247,7 @@ function fileCognitive(entry: FileComparisonEntry) {
 function fileComparisonEntry(base: FileMetric | null, head: FileMetric | null) {
   const entry = head ?? base;
   if (entry === null) return null;
-  if (unchangedFileEntry(base, head)) return null;
+  if (unchangedEntry(base, head, fileScoreFields)) return null;
   return {
     file: entry.file, status: comparisonStatus(base, head, sameFileScores(base, head)), base, head,
     delta: {
@@ -269,10 +268,6 @@ function sameFieldValues<T extends object>(base: T | null, head: T | null, field
   return base !== null && head !== null && fields.every(field =>
     base[field] === head[field]
   );
-}
-
-function unchangedFileEntry(base: FileMetric | null, head: FileMetric | null) {
-  return sameFileScores(base, head) && base?.file === head?.file;
 }
 
 function fileScoreDelta(base: FileMetric | null, head: FileMetric | null, field: typeof fileScoreFields[number]) {

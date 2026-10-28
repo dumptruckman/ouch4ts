@@ -2,6 +2,7 @@ import ts from "typescript";
 
 export type PropertyAccess = ts.PropertyAccessExpression | ts.ElementAccessExpression;
 export type Invocation = ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression;
+export type ImplementedFunction = ts.FunctionLikeDeclaration & { body: ts.ConciseBody };
 
 export function isInvocation(node: ts.Node): node is Invocation {
   return ts.isCallExpression(node) || ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node);
@@ -79,20 +80,12 @@ export function isInitializedDeclaration(node: ts.Node): node is (ts.VariableDec
   return (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) && node.initializer !== undefined;
 }
 
-export function literalPropertyName(node: ts.Node) {
-  if (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNumericLiteral(node)) return node.text;
-}
-
-export function hasImplementation(node: ts.Node): node is ts.FunctionLikeDeclaration & { body: ts.ConciseBody } {
+export function hasImplementation(node: ts.Node): node is ImplementedFunction {
   return ts.isFunctionLike(node) && "body" in node && node.body !== undefined;
 }
 
-export function hasFunctionBody(node: ts.SignatureDeclaration): node is ts.FunctionLikeDeclaration & { body: ts.ConciseBody } {
-  return "body" in node && node.body !== undefined;
-}
-
 export function definitionExpressions(node: ts.SignatureDeclaration) {
-  if (!hasFunctionBody(node)) return [];
+  if (!hasImplementation(node)) return [];
   const decorators = functionDecorators(node);
   return [...computedNameExpressions(node.name), ...decorators.map(decorator => decorator.expression)];
 }

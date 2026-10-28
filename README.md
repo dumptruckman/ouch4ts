@@ -2,7 +2,7 @@
 
 OUCH stands for Overall Upkeep and Change Hassle. This repository pairs an agent skill with an executable analyzer for JavaScript and TypeScript, including mixed projects.
 
-The score is derived from CRAP, Change Risk Anti-Patterns, inspired by [Uncle Bob's crap4clj](https://github.com/unclebob/crap4clj). OUCH adds cognitive complexity from SonarSource's whitepaper to CRAP's cyclomatic complexity and coverage formula to rank functions for maintenance attention. Higher scores indicate more maintenance hassle. Reports also show file cyclomatic and cognitive complexity to identify files worth examining.
+The score is derived from CRAP, Change Risk Anti-Patterns, inspired by [Uncle Bob's crap4clj](https://github.com/unclebob/crap4clj). OUCH adds cognitive complexity specified by [SonarSource's whitepaper, version 1.7](https://www.sonarsource.com/docs/CognitiveComplexity.pdf), to CRAP's cyclomatic complexity and coverage formula to rank functions for maintenance attention. Higher scores indicate more maintenance hassle. Reports also show file cyclomatic and cognitive complexity to identify files worth examining.
 
 ```text
 OUCH = CC² × (1 - coverage)³ + CC + cognitive

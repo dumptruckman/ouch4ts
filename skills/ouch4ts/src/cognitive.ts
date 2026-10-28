@@ -1,7 +1,5 @@
 import ts from "typescript";
-import { definitionExpressions, hasFunctionBody, isSimpleAssignment } from "./syntax.js";
-
-export { definitionExpressions } from "./syntax.js";
+import { definitionExpressions, hasImplementation, isSimpleAssignment, unwrapExpression } from "./syntax.js";
 
 /** Measure a function and its nested functions using the Cognitive Complexity whitepaper. */
 export function cognitiveComplexity(node: ts.FunctionLikeDeclaration, recursive: ReadonlySet<ts.SignatureDeclaration>) {
@@ -34,7 +32,7 @@ class CognitiveCounter {
   }
 
   visitFunction(node: ts.SignatureDeclaration, nesting: number, functionDepth: number) {
-    if (!hasFunctionBody(node)) return;
+    if (!hasImplementation(node)) return;
     this.complexity += Number(this.recursive.has(node));
     const executable = !isDeclarativeFunction(node);
     const nested = nesting + Number(isNestedExecutableFunction(functionDepth, executable));
@@ -70,8 +68,7 @@ function isDeclaration(node: ts.Statement) {
 
 function isDefinitionAssignment(node: ts.Expression) {
   if (!isSimpleAssignment(node)) return false;
-  let value = node.right;
-  while (ts.isParenthesizedExpression(value)) value = value.expression;
+  const value = unwrapExpression(node.right);
   return definitionKinds.has(value.kind);
 }
 
@@ -98,7 +95,7 @@ class FileSyntaxCounter {
   functions = 0;
 
   visit(node: ts.Node) {
-    const implemented = ts.isFunctionLike(node) && hasFunctionBody(node);
+    const implemented = hasImplementation(node);
     this.functions += Number(implemented);
     this.complexity += Number(implemented) + Number(isFileDecision(node));
     ts.forEachChild(node, child => this.visit(child));

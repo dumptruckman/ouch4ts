@@ -3,6 +3,8 @@ import ts from "typescript";
 import { cognitiveComplexity, fileComplexity } from "./cognitive.js";
 import { recursiveFunctions } from "./recursion.js";
 import { readLcov } from "./lcov.js";
+import { hasImplementation } from "./syntax.js";
+import type { ImplementedFunction } from "./syntax.js";
 
 export interface AnalysisOptions {
   sources: readonly { path: string; text: string }[];
@@ -43,7 +45,7 @@ class SourceAnalyzer {
     private readonly root: string, private readonly recursive: ReadonlySet<ts.SignatureDeclaration>) {}
 
   visit(node: ts.Node, scope = "") {
-    if (isRuntimeFunction(node)) {
+    if (hasImplementation(node)) {
       const name = scope + functionName(node, this.source);
       this.entries.push(scoreFunction(node, this.source, this.lines, name, this.root, this.recursive));
       ts.forEachChild(node, child => this.visit(child, name + "."));
@@ -96,47 +98,32 @@ function className(node: ts.Node) {
   if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return node.name?.text;
 }
 
-type RuntimeFunction = (
-  ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction | ts.MethodDeclaration |
-  ts.GetAccessorDeclaration | ts.SetAccessorDeclaration | ts.ConstructorDeclaration
-) & { body: ts.ConciseBody };
-
-function isRuntimeFunction(node: ts.Node): node is RuntimeFunction {
-  return runtimeFunctionKinds.has(node.kind) && "body" in node && node.body !== undefined;
-}
-
-const runtimeFunctionKinds = new Set([
-  ts.SyntaxKind.FunctionDeclaration, ts.SyntaxKind.FunctionExpression, ts.SyntaxKind.ArrowFunction,
-  ts.SyntaxKind.MethodDeclaration, ts.SyntaxKind.GetAccessor, ts.SyntaxKind.SetAccessor,
-  ts.SyntaxKind.Constructor,
-]);
-
-function accessorPrefix(node: RuntimeFunction) {
+function accessorPrefix(node: ImplementedFunction) {
   if (ts.isGetAccessorDeclaration(node)) return "get ";
   if (ts.isSetAccessorDeclaration(node)) return "set ";
   return "";
 }
 
-function functionName(node: RuntimeFunction, source: ts.SourceFile) {
+function functionName(node: ImplementedFunction, source: ts.SourceFile) {
   if (ts.isConstructorDeclaration(node)) return "constructor";
   if (node.name) return accessorPrefix(node) + node.name.getText(source);
   return assignedFunctionName(node, source) ?? unassignedFunctionName(node, source);
 }
 
-function unassignedFunctionName(node: RuntimeFunction, source: ts.SourceFile) {
+function unassignedFunctionName(node: ImplementedFunction, source: ts.SourceFile) {
   if (ts.isFunctionDeclaration(node)) return "default";
   const { line, character } = source.getLineAndCharacterOfPosition(node.getStart(source));
   return `<anonymous@${line + 1}:${character + 1}>`;
 }
 
-function assignedFunctionName(node: RuntimeFunction, source: ts.SourceFile) {
+function assignedFunctionName(node: ImplementedFunction, source: ts.SourceFile) {
   const parent = node.parent;
   if (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) {
     return parent.name.getText(source);
   }
 }
 
-function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<number, number> | undefined,
+function scoreFunction(node: ImplementedFunction, source: ts.SourceFile, lines: Map<number, number> | undefined,
   name: string, root: string, recursive: ReadonlySet<ts.SignatureDeclaration>) {
   const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
   const endLine = source.getLineAndCharacterOfPosition(node.end - 1).line + 1;
@@ -155,7 +142,7 @@ function functionScores(complexity: number, cognitive: number, fraction: number 
   return { coverage: fraction * 100, crap, ouch: crap + cognitive };
 }
 
-function functionStructure(node: RuntimeFunction, source: ts.SourceFile) {
+function functionStructure(node: ImplementedFunction, source: ts.SourceFile) {
   const range = bodyRange(node, source);
   const counter = new FunctionSyntaxCounter(source);
   ts.forEachChild(node, child => counter.count(child));
@@ -169,7 +156,7 @@ class FunctionSyntaxCounter {
   constructor(private readonly source: ts.SourceFile) {}
 
   count(child: ts.Node) {
-    if (isRuntimeFunction(child)) {
+    if (hasImplementation(child)) {
       this.recordNestedRange(child);
       return;
     }
@@ -177,7 +164,7 @@ class FunctionSyntaxCounter {
     ts.forEachChild(child, node => this.count(node));
   }
 
-  private recordNestedRange(node: RuntimeFunction) {
+  private recordNestedRange(node: ImplementedFunction) {
     const nested = bodyRange(node, this.source);
     if (nested) this.nestedRanges.push(nested);
   }
@@ -221,7 +208,7 @@ function isOptionalChainStep(node: ts.Node) {
     node.questionDotToken !== undefined;
 }
 
-function bodyRange(node: RuntimeFunction, source: ts.SourceFile) {
+function bodyRange(node: ImplementedFunction, source: ts.SourceFile) {
   const statements = bodyStatements(node.body);
   const first = statements[0];
   const last = statements.at(-1);

@@ -35,6 +35,25 @@ test("applies the whitepaper's JavaScript declaration-wrapper exception", () => 
 });
 
 test.each([
+  { name: "parentheses", definition: "(function () { if (ready) work(); })" },
+  { name: "an as assertion", definition: "(function () { if (ready) work(); }) as Handler" },
+  { name: "a satisfies expression", definition: "(function () { if (ready) work(); }) satisfies Handler" },
+  { name: "a non-null assertion", definition: "(function () { if (ready) work(); })!" },
+  { name: "a type assertion", definition: "<Handler>(function () { if (ready) work(); })" },
+])("preserves the declaration-wrapper exception through $name", ({ definition }) => {
+  const report = analyzeReport({
+    sources: [{ path: "src/namespace.ts", text: `type Handler = () => void;
+function namespace() {
+  var stored;
+  holder.run = ${definition};
+}` }],
+    lcov: "SF:src/namespace.ts\nDA:3,1\nDA:4,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "namespace")).toMatchObject({ cognitive: 1, ouch: 2 });
+  expect(report.files).toEqual([{ file: "src/namespace.ts", complexity: 3, cognitive: 1, functions: 2 }]);
+});
+
+test.each([
   { expression: "a || b", cognitive: 1 },
   { expression: "a && b || c && d", cognitive: 3 },
   { expression: "<div>{a && b && <span />}</div>", cognitive: 1 },
@@ -151,6 +170,41 @@ test.each([
     lcov: "SF:src/reassigned.ts\nDA:1,1\nend_of_record\n",
   });
   expect(report.entries.map(entry => entry.cognitive)).toEqual(cognitive);
+});
+
+test.each([
+  { name: "a local alias", setup: "let target = repeat;\n  target = () => 0;", invocation: "const alias = target; alias();" },
+  { name: "an object property", setup: "let target = repeat;\n  target = () => 0;", invocation: "const holder = { alias: target }; holder.alias();" },
+  { name: "an aliased object owner", setup: "let target = { run: repeat };\n  target = { run: () => 0 };",
+    invocation: "const alias = target; alias.run();" },
+  { name: "a nested object owner", setup: "let target = { run: repeat };\n  target = { run: () => 0 };",
+    invocation: "const alias = { owner: target }; alias.owner.run();" },
+])("does not invent recursion through $name of a reassigned binding", ({ setup, invocation }) => {
+  const report = analyzeReport({
+    sources: [{ path: "src/reassigned.ts", text: `function repeat() {
+  ${setup}
+  ${invocation}
+}` }],
+    lcov: "SF:src/reassigned.ts\nDA:2,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "repeat")).toMatchObject({ complexity: 1, cognitive: 0, ouch: 1 });
+});
+
+test.each([
+  { name: "a later spread", object: "{ repeat, ...{ repeat: () => 0 } }", cognitive: 0, ouch: 1 },
+  { name: "an earlier spread", object: "{ ...{ repeat: () => 0 }, repeat }", cognitive: 1, ouch: 2 },
+  { name: "a later property", object: "{ repeat, repeat: () => 0 }", cognitive: 0, ouch: 1 },
+  { name: "an unrelated spread", object: "{ repeat, ...{ other: () => 0 } }", cognitive: 1, ouch: 2 },
+  { name: "an unresolved later spread", object: "{ repeat, ...unknownObject }", cognitive: 0, ouch: 1 },
+])("resolves recursion using the effective property after $name", ({ object, cognitive, ouch }) => {
+  const report = analyzeReport({
+    sources: [{ path: "src/properties.ts", text: `function repeat() {
+  const obj = ${object};
+  obj.repeat();
+}` }],
+    lcov: "SF:src/properties.ts\nDA:3,1\nend_of_record\n",
+  });
+  expect(report.entries.find(entry => entry.name === "repeat")).toMatchObject({ complexity: 1, cognitive, ouch });
 });
 
 test("resolves element-access keys by value instead of the key variable's name", () => {

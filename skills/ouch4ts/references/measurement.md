@@ -40,16 +40,22 @@ Normal JSON reports contain `entries` for functions and `files` for file metrics
 
 ## Cognitive complexity
 
-The counter follows SonarSource's [Cognitive Complexity whitepaper, version 1.7](https://www.sonarsource.com/docs/CognitiveComplexity.pdf), including Appendix A's JavaScript exception. It intentionally differs from SonarJS S3776's independent function scoring.
+The specification is SonarSource's [Cognitive Complexity whitepaper, version 1.7](https://www.sonarsource.com/docs/CognitiveComplexity.pdf). Appendix B lists the increments and nesting rules, subject to Appendix A's language exceptions. The rules below summarize its application to JavaScript and TypeScript; the whitepaper takes precedence if this summary disagrees. This intentionally differs from SonarJS S3776's independent function scoring.
 
 - Start each reported function at nesting zero. Include its nested functions and callbacks, increasing nesting when entering them. Their decisions contribute to the enclosing function's cognitive score. Separately reported nested functions start at zero for their own score.
 - Count decisions in parameter expressions, parameter decorators, and the function body. Computed method names and method decorators contribute to the enclosing function's cognitive score when there is one, rather than the method's own score.
 - Add 1 plus the current nesting depth for `if`, loops, `switch`, `catch`, and ternaries. Each `else if` adds 1 without a nesting surcharge; a final `else` adds 1. Their branch bodies increase nesting depth. Loop headers and conditional tests keep their current depth. Switch cases increase nesting depth but add no separate case points. `try` and `finally` add no points or nesting.
 - Add 1 for each sequence of `&&` or `||`, including a new sequence when the operator changes. Parentheses do not split a sequence. JSX follows the same rules. Null-coalescing `??` is ignored as shorthand, and boolean expressions inside its operands are scored separately.
-- Add 1 per function in a direct or indirect recursion cycle, regardless of the number of recursive calls. Call targets are resolved among analyzed sources, including relative imports, typed bindings, methods, overloads, constructors, template tags, and accessor reads/writes. Reassigned bindings and unresolved or dynamically selected targets are conservatively excluded rather than guessed to be recursive.
+- Add 1 per function in a direct or indirect recursion cycle, regardless of the number of recursive calls. The whitepaper defines this increment in its Recursion section and Appendix B.
 - A labeled `break` or `continue` adds 1. Unlabeled jumps, early returns, and ordinary calls add no points. Optional chaining, parameter defaults, logical assignments, types, and annotations add no direct points; decisions inside their expressions still count.
 
-Appendix A exempts JavaScript functions used purely as declaration wrappers from function-nesting increments. A wrapper contains only declarations or assignments of functions/classes, with no structural control flow outside its nested functions. Other functions, including ones containing returns or ordinary expression statements, receive normal nesting. Nesting ends when its branch or function ends; SonarJS's retained-nesting quirks are not reproduced.
+Appendix A exempts JavaScript functions used purely as declaration wrappers from function-nesting increments. A wrapper contains only declarations or assignments of functions/classes, with no structural control flow outside its nested functions. Parentheses and TypeScript assertions do not change whether an assignment declares a function or class. Other functions, including ones containing returns or ordinary expression statements, receive normal nesting. Nesting ends when its branch or function ends; SonarJS's retained-nesting quirks are not reproduced.
+
+### Call-resolution limits
+
+The whitepaper does not prescribe a call-resolution algorithm. The analyzer uses TypeScript's symbols and signatures to identify cycles among the supplied sources, including relative imports, typed bindings, methods, overloads, constructors, template tags, and accessor reads/writes.
+
+Bindings written anywhere in those sources are excluded throughout alias lookup, without guessing the order of assignments at runtime. Object calls use the effective property after spreads and repeated property names. A later unresolved spread prevents choosing an earlier property as the target. A conditional callee can contribute to a possible recursion cycle when TypeScript resolves its signature to an implementation; otherwise dynamically selected or unresolved targets are excluded. These are static-analysis choices, not additional whitepaper increments.
 
 ## Coverage
 
