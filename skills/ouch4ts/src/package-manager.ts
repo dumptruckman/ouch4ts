@@ -18,14 +18,17 @@ export async function defaultCoverageCommand(cwd: string) {
 export async function defaultSetupCommand(cwd: string) {
   const manager = await detectPackageManager(cwd, "--setup-command");
   if (manager.name === "npm") return "npm ci --ignore-scripts";
-  if (manager.name === "yarn") {
-    const lockfile = await yarnLockfile(manager.directory);
-    if (lockfile === null) throw new Error("Default Yarn setup requires yarn.lock. Pass --setup-command '<command>'.");
-    const major = manager.major ?? yarnMajor(manager.directory, lockfile);
-    if (major === 2) return "yarn install --immutable --skip-builds";
-    if (major >= 3) return "yarn install --immutable --mode=skip-build";
-  }
+  if (manager.name === "yarn") return yarnSetupCommand(manager);
   return `${manager.name} install --frozen-lockfile --ignore-scripts`;
+}
+
+async function yarnSetupCommand(manager: Awaited<ReturnType<typeof detectPackageManager>>) {
+  const lockfile = await yarnLockfile(manager.directory);
+  if (lockfile === null) throw new Error("Default Yarn setup requires yarn.lock. Pass --setup-command '<command>'.");
+  const major = manager.major ?? yarnMajor(manager.directory, lockfile);
+  if (major === 2) return "yarn install --immutable --skip-builds";
+  if (major >= 3) return "yarn install --immutable --mode=skip-build";
+  return "yarn install --frozen-lockfile --ignore-scripts";
 }
 
 function yarnMajor(cwd: string, lockfile: string) {
@@ -59,14 +62,7 @@ async function detectPackageManager(cwd: string, flag: string): Promise<{
 }> {
   const manifest = await readManifest(cwd);
   if (manifest.packageManager !== undefined) {
-    const value = manifest.packageManager;
-    const [name, version] = typeof value === "string" ? value.split("@") : [];
-    const major = Number.parseInt(version ?? "", 10);
-    const manager = lockfiles.find(manager => manager.name === name);
-    if (!manager || !Number.isFinite(major)) {
-      throw new Error(`Unsupported packageManager in package.json. Pass ${flag} '<command>'.`);
-    }
-    return { name: manager.name, major, directory: cwd };
+    return { ...declaredPackageManager(manifest.packageManager, flag), directory: cwd };
   }
   const files = new Set(await readdir(cwd));
   const matches = lockfiles.filter(manager => manager.files.some(file => files.has(file)));
@@ -77,6 +73,16 @@ async function detectPackageManager(cwd: string, flag: string): Promise<{
   if (manager) return { name: manager.name, major: undefined, directory: cwd };
   if (files.has(".git") || dirname(cwd) === cwd) return { name: "npm", major: undefined, directory: cwd };
   return detectPackageManager(dirname(cwd), flag);
+}
+
+function declaredPackageManager(value: unknown, flag: string) {
+  const [name, version] = typeof value === "string" ? value.split("@") : [];
+  const major = Number.parseInt(version ?? "", 10);
+  const manager = lockfiles.find(manager => manager.name === name);
+  if (!manager || !Number.isFinite(major)) {
+    throw new Error(`Unsupported packageManager in package.json. Pass ${flag} '<command>'.`);
+  }
+  return { name: manager.name, major };
 }
 
 async function readManifest(cwd: string): Promise<Record<string, unknown>> {

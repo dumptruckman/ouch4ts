@@ -27,46 +27,63 @@ type FileFunction = {
 
 /** SonarJS file metrics count module code and aggregate nested functions with their lexical nesting. */
 export function fileComplexity(source: ts.SourceFile) {
-  let complexity = 0;
-  let cognitive = 0;
-  let functions = 0;
-  const countedLogical = new Set<ts.BinaryExpression>();
-  function visit(node: ts.Node, nesting: number, depth: number, top?: FileFunction) {
+  const visitor = new FileComplexityVisitor();
+  visitor.visit(source, 0, 0);
+  return visitor.metrics;
+}
+
+class FileComplexityVisitor {
+  readonly metrics = { complexity: 0, cognitive: 0, functions: 0 };
+  private readonly countedLogical = new Set<ts.BinaryExpression>();
+
+  visit(node: ts.Node, nesting: number, depth: number, top?: FileFunction) {
     if (ts.isFunctionLike(node)) {
-      if (!("body" in node) || node.body === undefined) return;
-      for (const expression of definitionExpressions(node)) visit(expression, nesting, depth, top);
-      complexity++;
-      functions++;
-      const group = depth === 0 ? {
-        own: 0, nested: 0, nestingPenalty: 0, structural: false,
-        componentName: hasComponentName(node), returnsJsx: false,
-      } : top;
-      const functionNesting = nesting + Number(depth > 1);
-      for (const parameter of node.parameters) visit(parameter, functionNesting, depth + 1, group);
-      visit(node.body, functionNesting, depth + 1, group);
-      if (depth === 0 && group) {
-        const component = group.componentName && group.returnsJsx;
-        cognitive += group.own + group.nested + (group.structural && !component ? group.nestingPenalty : 0);
-      }
+      this.visitFunction(node, nesting, depth, top);
       return;
     }
-    if (fileDecisionKinds.has(node.kind) || isLogicalExpression(node)) complexity++;
-    const increment = controlFlowIncrement(node, nesting) + logicalIncrement(node, countedLogical);
-    const structural = isStructural(node);
-    if (depth === 0) cognitive += increment;
-    else if (top && depth === 1) {
-      top.own += increment;
-      top.structural ||= structural;
-      if (ts.isReturnStatement(node)) top.returnsJsx ||= isJsxReturn(node.expression);
-    } else if (top) {
-      top.nested += increment;
-      top.nestingPenalty += Number(structural);
-    }
+    if (fileDecisionKinds.has(node.kind) || isLogicalExpression(node)) this.metrics.complexity++;
+    const increment = controlFlowIncrement(node, nesting) + logicalIncrement(node, this.countedLogical);
+    this.recordIncrement(node, increment, depth, top);
     const nested = nestedChildren(node);
-    ts.forEachChild(node, child => visit(child, nesting + Number(nested.includes(child)), depth, top));
+    ts.forEachChild(node, child => this.visit(child, nesting + Number(nested.includes(child)), depth, top));
   }
-  visit(source, 0, 0);
-  return { complexity, cognitive, functions };
+
+  private visitFunction(node: ts.SignatureDeclaration, nesting: number, depth: number, top?: FileFunction) {
+    if (!("body" in node) || node.body === undefined) return;
+    for (const expression of definitionExpressions(node)) this.visit(expression, nesting, depth, top);
+    this.metrics.complexity++;
+    this.metrics.functions++;
+    const group = depth === 0 ? {
+      own: 0, nested: 0, nestingPenalty: 0, structural: false,
+      componentName: hasComponentName(node), returnsJsx: false,
+    } : top;
+    const functionNesting = nesting + Number(depth > 1);
+    for (const parameter of node.parameters) this.visit(parameter, functionNesting, depth + 1, group);
+    this.visit(node.body, functionNesting, depth + 1, group);
+    this.finishFunction(depth, group);
+  }
+
+  private finishFunction(depth: number, group: FileFunction | undefined) {
+    if (depth !== 0 || !group) return;
+    const component = group.componentName && group.returnsJsx;
+    this.metrics.cognitive += group.own + group.nested + (group.structural && !component ? group.nestingPenalty : 0);
+  }
+
+  private recordIncrement(node: ts.Node, increment: number, depth: number, top: FileFunction | undefined) {
+    if (depth === 0) {
+      this.metrics.cognitive += increment;
+      return;
+    }
+    if (!top) return;
+    if (depth > 1) {
+      top.nested += increment;
+      top.nestingPenalty += Number(isStructural(node));
+      return;
+    }
+    top.own += increment;
+    top.structural ||= isStructural(node);
+    if (ts.isReturnStatement(node)) top.returnsJsx ||= isJsxReturn(node.expression);
+  }
 }
 
 function hasComponentName(node: ts.SignatureDeclaration) {

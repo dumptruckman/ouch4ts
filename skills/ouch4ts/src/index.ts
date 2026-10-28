@@ -95,6 +95,20 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
   name: string, root: string) {
   const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
   const endLine = source.getLineAndCharacterOfPosition(node.end - 1).line + 1;
+  const { complexity, range, nestedRanges } = functionStructure(node, source);
+  const fraction = functionCoverage(lines, range, nestedRanges);
+  const cognitive = cognitiveComplexity(node);
+  const crap = fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity;
+  return {
+    name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity, cognitive,
+    inclusiveCognitive: cognitive,
+    coverage: fraction === null ? null : fraction * 100,
+    crap,
+    ouch: crap === null ? null : crap + cognitive,
+  };
+}
+
+function functionStructure(node: RuntimeFunction, source: ts.SourceFile) {
   const range = bodyRange(node, source);
   const nestedRanges: NonNullable<ReturnType<typeof bodyRange>>[] = [];
   let complexity = 1;
@@ -108,19 +122,15 @@ function scoreFunction(node: RuntimeFunction, source: ts.SourceFile, lines: Map<
     ts.forEachChild(child, count);
   }
   ts.forEachChild(node, count);
+  return { complexity, range, nestedRanges };
+}
+
+function functionCoverage(lines: Map<number, number> | undefined, range: ReturnType<typeof bodyRange>,
+  nestedRanges: NonNullable<ReturnType<typeof bodyRange>>[]) {
   const executable = [...(lines ?? [])].filter(([number]) => range && number >= range[0] && number <= range[1] &&
     !nestedRanges.some(([start, end]) => number >= start && number <= end));
-  const fraction = executable.length === 0 ? null
+  return executable.length === 0 ? null
     : executable.filter(([, hits]) => hits > 0).length / executable.length;
-  const cognitive = cognitiveComplexity(node);
-  const crap = fraction === null ? null : complexity ** 2 * (1 - fraction) ** 3 + complexity;
-  return {
-    name, file: relative(root, resolve(root, source.fileName)).split(sep).join("/"), line, endLine, complexity, cognitive,
-    inclusiveCognitive: cognitive,
-    coverage: fraction === null ? null : fraction * 100,
-    crap,
-    ouch: crap === null ? null : crap + cognitive,
-  };
 }
 
 const decisionKinds = new Set([

@@ -146,16 +146,20 @@ function formatTable(title: string, rows: string[][], leftColumns = 2) {
 type CliValues = ReturnType<typeof parseOptions>["values"];
 
 function validateReportMode(values: CliValues) {
-  if (values.exclude?.some(pattern => pattern.trim() === "")) throw new Error("--exclude must not be empty");
-  for (const option of ["coverage-command", "setup-command"] as const) {
-    if (values[option]?.trim() === "") throw new Error(`--${option} must not be empty`);
-  }
+  validateNonEmptyOptions(values);
   if (values.compare === undefined) {
     if (values.refresh) throw new Error("--refresh requires --compare");
     return;
   }
   if (values.since !== undefined || values["use-existing-coverage"]) {
     throw new Error("--compare cannot combine with --since or --use-existing-coverage");
+  }
+}
+
+function validateNonEmptyOptions(values: CliValues) {
+  if (values.exclude?.some(pattern => pattern.trim() === "")) throw new Error("--exclude must not be empty");
+  for (const option of ["coverage-command", "setup-command"] as const) {
+    if (values[option]?.trim() === "") throw new Error(`--${option} must not be empty`);
   }
 }
 
