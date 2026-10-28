@@ -5,7 +5,7 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
-import { runCli } from "../src/command.js";
+import { runCommandLine } from "../src/command.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const cli = join(root, "dist/cli.js");
@@ -313,17 +313,13 @@ async function run(cwd: string, ...args: string[]) {
   const stderr: string[] = [];
   const output = vi.spyOn(console, "log").mockImplementation(message => { stdout.push(String(message)); });
   const errors = vi.spyOn(console, "error").mockImplementation(message => { stderr.push(String(message)); });
-  let status = 0;
   try {
-    await runCli(args, cwd);
-  } catch (error) {
-    status = 1;
-    stderr.push(error instanceof Error ? error.message : String(error));
+    const status = await runCommandLine(args, cwd);
+    return { status, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
   } finally {
     output.mockRestore();
     errors.mockRestore();
   }
-  return { status, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
 }
 
 function git(cwd: string, ...args: string[]) {

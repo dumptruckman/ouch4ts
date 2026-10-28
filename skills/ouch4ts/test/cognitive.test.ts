@@ -94,6 +94,7 @@ test("keeps parameter control flow from qualifying as a declaration-only wrapper
 test.each([
   { name: "overloaded functions", text: "function repeat(n: number): number; function repeat(n: number) { return repeat(n); }" },
   { name: "constructors", text: "class Loop { constructor() { new Loop(); } }" },
+  { name: "overloaded constructors", text: "class Loop { constructor(n: number); constructor(n: number) { new Loop(n); } }" },
   { name: "template tags", text: "function repeat() { return repeat`again`; }" },
 ])("resolves recursion through $name", ({ text }) => {
   const report = analyzeReport({
@@ -101,6 +102,19 @@ test.each([
     lcov: "SF:src/recursive.ts\nDA:1,1\nend_of_record\n",
   });
   expect(report.entries[0]).toMatchObject({ cognitive: 1, ouch: 2 });
+});
+
+test("resolves an overloaded function selected by a conditional call", () => {
+  const report = analyzeReport({
+    sources: [{ path: "src/recursive.ts", text: `function repeat(n: number): number;
+function repeat(n: number) { return (choose ? repeat : other)(n); }
+function other(n: number) { return n; }` }],
+    lcov: "SF:src/recursive.ts\nDA:2,1\nDA:3,1\nend_of_record\n",
+  });
+  expect(report.entries).toMatchObject([
+    { name: "repeat", complexity: 2, cognitive: 2, crap: 2, ouch: 4 },
+    { name: "other", complexity: 1, cognitive: 0, crap: 1, ouch: 1 },
+  ]);
 });
 
 test.each([

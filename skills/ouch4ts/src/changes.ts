@@ -30,8 +30,11 @@ function changedRanges(diff: string, root: string) {
 
 function currentDiffFile(line: string, root: string, file: string | undefined) {
   if (line.startsWith("diff --git ")) return undefined;
-  if (file === undefined && line.startsWith("+++ ")) return currentFilePath(line, root);
-  return file;
+  return file ?? addedFilePath(line, root);
+}
+
+function addedFilePath(line: string, root: string) {
+  if (line.startsWith("+++ ")) return currentFilePath(line, root);
 }
 
 function currentFilePath(header: string, root: string) {
@@ -48,10 +51,10 @@ function addHunk(changes: Map<string, { start: number; count: number }[]>, file:
 }
 
 function overlapsFunction({ start, count }: { start: number; count: number }, entry: ReturnType<typeof analyze>[number]) {
-  // A deletion belongs to a surviving function when both adjacent lines remain inside it.
-  return count === 0
-    ? entry.line <= start && entry.endLine >= start + 1
-    : entry.line <= start + count - 1 && entry.endLine >= start;
+  const lastChangedLine = start + Math.max(count - 1, 0);
+  // A deletion requires the function to contain the following line as well.
+  const requiredEndLine = start + Number(count === 0);
+  return entry.line <= lastChangedLine && entry.endLine >= requiredEndLine;
 }
 
 // Git uses C escapes for special path characters even with core.quotePath disabled.

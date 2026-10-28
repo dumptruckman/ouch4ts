@@ -4,6 +4,22 @@ import { parseArgs } from "node:util";
 import { changedSourceFilter } from "./changes.js";
 import { analyzeProject } from "./project.js";
 import { compareProject } from "./comparison.js";
+import { formatCoverage, formatDelta, formatPair, formatScore, formatTable } from "./format.js";
+
+/** Report command errors and return the process exit code. */
+export async function runCommandLine(args: string[], cwd: string) {
+  try {
+    await runCli(args, cwd);
+    return 0;
+  } catch (error) {
+    console.error(`ouch4ts: ${errorMessage(error)}`);
+    return 1;
+  }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function parseOptions(args: string[]) {
   return parseArgs({ args, allowPositionals: true, options: {
@@ -65,10 +81,16 @@ async function reportCurrent(options: Parameters<typeof analyzeProject>[0], sinc
   const changes = since === undefined ? undefined : changedSourceFilter(since, options.cwd);
   const report = await analyzeProject(options);
   await writeReport(options.cwd, "ouch.json", report);
-  const entries = report.entries.filter(entry => (changes?.matchesFunction(entry) ?? true) && matchesPath(entry.file, positionals));
-  const files = report.files.filter(entry => (changes?.matchesFile(entry.file) ?? true) && matchesPath(entry.file, positionals));
+  const entries = report.entries.filter(entry => changes?.matchesFunction(entry) ?? true)
+    .filter(entry => matchesPath(entry.file, positionals));
+  const files = report.files.filter(entry => changes?.matchesFile(entry.file) ?? true)
+    .filter(entry => matchesPath(entry.file, positionals));
   console.log(formatFiles(files) + "\n\n" + formatReport(entries));
-  const unknown = report.entries.filter(entry => entry.coverage === null).length;
+  warnUnknownCoverage(report.entries);
+}
+
+function warnUnknownCoverage(entries: Metric[]) {
+  const unknown = entries.filter(entry => entry.coverage === null).length;
   if (unknown) console.error(`Warning: ${unknown} functions have N/A coverage. Check LCOV source paths and source maps.`);
 }
 
@@ -82,9 +104,7 @@ function formatFiles(files: Awaited<ReturnType<typeof analyzeProject>>["files"])
 function formatReport(entries: Awaited<ReturnType<typeof analyzeProject>>["entries"]) {
   const rows = [["Function", "File", "CC", "Cog", "Cov%", "CRAP", "OUCH"], ...entries.map(entry => [
     entry.name, `${entry.file}:${entry.line}`, String(entry.complexity), String(entry.cognitive),
-    entry.coverage === null ? "N/A" : entry.coverage.toFixed(1) + "%",
-    entry.crap === null ? "N/A" : entry.crap.toFixed(1),
-    entry.ouch === null ? "N/A" : entry.ouch.toFixed(1),
+    formatCoverage(entry.coverage), formatScore(entry.crap), formatScore(entry.ouch),
   ])];
   return formatTable("OUCH Report", rows);
 }
@@ -106,60 +126,49 @@ function formatComparison(entries: Awaited<ReturnType<typeof compareProject>>["e
 function formatFileComparison(entries: Awaited<ReturnType<typeof compareProject>>["files"]) {
   const rows = [["File", "CC base/head", "CC delta", "Cog base/head", "Cog delta", "Functions base/head", "Status"],
     ...entries.map(entry => [entry.file,
-      formatPair(entry.base?.complexity, entry.head?.complexity), formatDelta(entry.delta.complexity),
-      formatPair(entry.base?.cognitive, entry.head?.cognitive), formatDelta(entry.delta.cognitive),
-      formatPair(entry.base?.functions, entry.head?.functions), entry.status,
+      fileScorePair(entry, "complexity"), formatDelta(entry.delta.complexity),
+      fileScorePair(entry, "cognitive"), formatDelta(entry.delta.cognitive),
+      fileScorePair(entry, "functions"), entry.status,
     ])];
   return formatTable("File complexity comparison", rows, 1);
 }
 
-function formatPair(base: number | undefined, head: number | undefined) {
-  return `${base ?? "-"} / ${head ?? "-"}`;
+function fileScorePair(entry: Awaited<ReturnType<typeof compareProject>>["files"][number], field: "complexity" | "cognitive" | "functions") {
+  return formatPair(entry.base?.[field], entry.head?.[field]);
 }
 
 function sideScore(entry: Metric | null, field: "coverage" | "crap" | "ouch") {
   if (entry === null) return "-";
-  const value = entry[field];
-  return value === null ? "N/A" : value.toFixed(1);
-}
-
-function formatDelta(value: number | null) {
-  if (value === null) return "-";
-  return (value > 0 ? "+" : "") + value.toFixed(1);
-}
-
-function formatTable(title: string, rows: string[][], leftColumns = 2) {
-  const widths = rows[0]!.map((_, column) => {
-    const lengths = rows.map(row => row[column]!.length);
-    return Math.max(...lengths);
-  });
-  const formatted = rows.map(row => {
-    const columns = row.map((value, column) =>
-      column < leftColumns ? value.padEnd(widths[column]!) : value.padStart(widths[column]!)
-    );
-    return columns.join("  ").trimEnd();
-  });
-  return [title, "=".repeat(title.length), ...formatted].join("\n");
+  return formatScore(entry[field]);
 }
 
 type CliValues = ReturnType<typeof parseOptions>["values"];
 
 function validateReportMode(values: CliValues) {
   validateNonEmptyOptions(values);
-  if (values.compare === undefined) {
-    if (values.refresh) throw new Error("--refresh requires --compare");
-    return;
-  }
-  if (values.since !== undefined || values["use-existing-coverage"]) {
+  if (values.compare === undefined) return validateCurrentReport(values);
+  if (hasCurrentReportOptions(values)) {
     throw new Error("--compare cannot combine with --since or --use-existing-coverage");
   }
 }
 
+function validateCurrentReport(values: CliValues) {
+  if (values.refresh) throw new Error("--refresh requires --compare");
+}
+
+function hasCurrentReportOptions(values: CliValues) {
+  return values.since !== undefined || values["use-existing-coverage"] === true;
+}
+
 function validateNonEmptyOptions(values: CliValues) {
-  if (values.exclude?.some(pattern => pattern.trim() === "")) throw new Error("--exclude must not be empty");
+  for (const pattern of values.exclude ?? []) validateNonEmptyValue("exclude", pattern);
   for (const option of ["coverage-command", "setup-command"] as const) {
-    if (values[option]?.trim() === "") throw new Error(`--${option} must not be empty`);
+    validateNonEmptyValue(option, values[option]);
   }
+}
+
+function validateNonEmptyValue(option: string, value: string | undefined) {
+  if (value?.trim() === "") throw new Error(`--${option} must not be empty`);
 }
 
 function projectOptions(values: CliValues, cwd: string) {

@@ -1,4 +1,7 @@
 import ts from "typescript";
+import { definitionExpressions, hasFunctionBody, isSimpleAssignment } from "./syntax.js";
+
+export { definitionExpressions } from "./syntax.js";
 
 /** Measure a function and its nested functions using the Cognitive Complexity whitepaper. */
 export function cognitiveComplexity(node: ts.FunctionLikeDeclaration, recursive: ReadonlySet<ts.SignatureDeclaration>) {
@@ -15,8 +18,7 @@ class CognitiveCounter {
 
   visit(node: ts.Node, nesting: number, functionDepth: number) {
     if (ts.isFunctionLike(node)) {
-      for (const expression of definitionExpressions(node)) this.visit(expression, nesting, functionDepth);
-      this.visitFunction(node, nesting, functionDepth);
+      this.visitDefinition(node, nesting, functionDepth);
       return;
     }
     this.complexity += controlFlowIncrement(node, nesting) + logicalIncrement(node, this.countedLogical);
@@ -26,15 +28,24 @@ class CognitiveCounter {
     });
   }
 
+  private visitDefinition(node: ts.SignatureDeclaration, nesting: number, functionDepth: number) {
+    for (const expression of definitionExpressions(node)) this.visit(expression, nesting, functionDepth);
+    this.visitFunction(node, nesting, functionDepth);
+  }
+
   visitFunction(node: ts.SignatureDeclaration, nesting: number, functionDepth: number) {
-    if (!("body" in node) || node.body === undefined) return;
+    if (!hasFunctionBody(node)) return;
     this.complexity += Number(this.recursive.has(node));
-    const declarative = isDeclarativeFunction(node.body) && !node.parameters.some(hasStructuralCode);
-    const nested = nesting + Number(functionDepth > 0 && !declarative);
-    const depth = functionDepth + Number(!declarative);
+    const executable = !isDeclarativeFunction(node);
+    const nested = nesting + Number(isNestedExecutableFunction(functionDepth, executable));
+    const depth = functionDepth + Number(executable);
     for (const parameter of node.parameters) this.visit(parameter, nested, depth);
     this.visit(node.body, nested, depth);
   }
+}
+
+function isNestedExecutableFunction(depth: number, executable: boolean) {
+  return depth > 0 && executable;
 }
 
 const declarationKinds = new Set([
@@ -43,18 +54,30 @@ const declarationKinds = new Set([
   ts.SyntaxKind.ModuleDeclaration,
 ]);
 
-function isDeclarativeFunction(body: ts.ConciseBody) {
-  return ts.isBlock(body) && body.statements.every(isDeclaration) && !hasStructuralCode(body);
+function isDeclarativeFunction(node: ts.FunctionLikeDeclaration & { body: ts.ConciseBody }) {
+  return isDeclarationBlock(node.body) && !hasStructuralCode(node.body) && !node.parameters.some(hasStructuralCode);
+}
+
+function isDeclarationBlock(body: ts.ConciseBody) {
+  return ts.isBlock(body) && body.statements.every(isDeclaration);
 }
 
 function isDeclaration(node: ts.Statement) {
   if (declarationKinds.has(node.kind)) return true;
-  if (!ts.isExpressionStatement(node) || !ts.isBinaryExpression(node.expression)) return false;
-  if (node.expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
-  let value = node.expression.right;
-  while (ts.isParenthesizedExpression(value)) value = value.expression;
-  return ts.isFunctionExpression(value) || ts.isArrowFunction(value) || ts.isClassExpression(value);
+  if (!ts.isExpressionStatement(node)) return false;
+  return isDefinitionAssignment(node.expression);
 }
+
+function isDefinitionAssignment(node: ts.Expression) {
+  if (!isSimpleAssignment(node)) return false;
+  let value = node.right;
+  while (ts.isParenthesizedExpression(value)) value = value.expression;
+  return definitionKinds.has(value.kind);
+}
+
+const definitionKinds = new Set([
+  ts.SyntaxKind.FunctionExpression, ts.SyntaxKind.ArrowFunction, ts.SyntaxKind.ClassExpression,
+]);
 
 function hasStructuralCode(node: ts.Node): boolean {
   if (ts.isFunctionLike(node)) return definitionExpressions(node).some(hasStructuralCode);
@@ -63,20 +86,27 @@ function hasStructuralCode(node: ts.Node): boolean {
 
 /** File cognitive complexity counts each syntax node once, including module-level code. */
 export function fileComplexity(source: ts.SourceFile, recursive: ReadonlySet<ts.SignatureDeclaration>) {
-  let complexity = 0;
-  let functions = 0;
-  function visit(node: ts.Node) {
-    if (ts.isFunctionLike(node) && "body" in node && node.body !== undefined) {
-      complexity++;
-      functions++;
-    }
-    if (fileDecisionKinds.has(node.kind) || isLogicalExpression(node)) complexity++;
-    ts.forEachChild(node, visit);
-  }
-  visit(source);
+  const syntax = new FileSyntaxCounter();
+  syntax.visit(source);
   const counter = new CognitiveCounter(recursive);
   counter.visit(source, 0, 0);
-  return { complexity, cognitive: counter.complexity, functions };
+  return { complexity: syntax.complexity, cognitive: counter.complexity, functions: syntax.functions };
+}
+
+class FileSyntaxCounter {
+  complexity = 0;
+  functions = 0;
+
+  visit(node: ts.Node) {
+    const implemented = ts.isFunctionLike(node) && hasFunctionBody(node);
+    this.functions += Number(implemented);
+    this.complexity += Number(implemented) + Number(isFileDecision(node));
+    ts.forEachChild(node, child => this.visit(child));
+  }
+}
+
+function isFileDecision(node: ts.Node) {
+  return fileDecisionKinds.has(node.kind) || isLogicalExpression(node);
 }
 
 const fileDecisionKinds = new Set([
@@ -90,28 +120,27 @@ function isStructural(node: ts.Node) {
   return isNestingStructure(node);
 }
 
-export function definitionExpressions(node: ts.SignatureDeclaration) {
-  if (!("body" in node) || node.body === undefined) return [];
-  const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];
-  return [...computedNameExpressions(node.name), ...decorators.map(decorator => decorator.expression)];
-}
-
-function computedNameExpressions(name: ts.DeclarationName | undefined) {
-  return name !== undefined && ts.isComputedPropertyName(name) ? [name.expression] : [];
-}
-
 function controlFlowIncrement(node: ts.Node, nesting: number) {
   if (ts.isIfStatement(node)) return conditionIncrement(node, nesting);
   if (isNestingStructure(node)) return nesting + 1;
-  if (ts.isBreakStatement(node) || ts.isContinueStatement(node)) return Number(node.label !== undefined);
-  return 0;
+  return Number(isLabeledJump(node));
+}
+
+function isLabeledJump(node: ts.Node) {
+  return (ts.isBreakStatement(node) || ts.isContinueStatement(node)) && node.label !== undefined;
 }
 
 function conditionIncrement(node: ts.IfStatement, nesting: number) {
-  const isElseIf = ts.isIfStatement(node.parent) && node.parent.elseStatement === node;
-  const condition = isElseIf ? 1 : nesting + 1;
-  const alternative = node.elseStatement !== undefined && !ts.isIfStatement(node.elseStatement);
-  return condition + Number(alternative);
+  const condition = isElseIf(node) ? 1 : nesting + 1;
+  return condition + Number(hasFinalElse(node));
+}
+
+function isElseIf(node: ts.IfStatement) {
+  return ts.isIfStatement(node.parent) && node.parent.elseStatement === node;
+}
+
+function hasFinalElse(node: ts.IfStatement): node is ts.IfStatement & { elseStatement: ts.Statement } {
+  return node.elseStatement !== undefined && !ts.isIfStatement(node.elseStatement);
 }
 
 function isNestingStructure(node: ts.Node) {
@@ -122,15 +151,21 @@ function isNestingStructure(node: ts.Node) {
 function nestedChildren(node: ts.Node): readonly ts.Node[] {
   if (ts.isIterationStatement(node, false)) return [node.statement];
   if (ts.isCaseBlock(node)) return node.clauses;
+  return catchBody(node) ?? conditionalBranches(node);
+}
+
+function catchBody(node: ts.Node) {
   if (ts.isCatchClause(node)) return [node.block];
-  return conditionalBranches(node);
 }
 
 function conditionalBranches(node: ts.Node): readonly ts.Node[] {
   if (ts.isConditionalExpression(node)) return [node.whenTrue, node.whenFalse];
   if (!ts.isIfStatement(node)) return [];
-  if (node.elseStatement === undefined || ts.isIfStatement(node.elseStatement)) return [node.thenStatement];
-  return [node.thenStatement, node.elseStatement];
+  return ifBranches(node);
+}
+
+function ifBranches(node: ts.IfStatement): readonly ts.Statement[] {
+  return hasFinalElse(node) ? [node.thenStatement, node.elseStatement] : [node.thenStatement];
 }
 
 const logicalOperators = new Set([
@@ -142,10 +177,18 @@ function isLogicalExpression(node: ts.Node): node is ts.BinaryExpression {
 }
 
 function logicalIncrement(node: ts.Node, counted: Set<ts.BinaryExpression>) {
-  if (!isLogicalExpression(node) || node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken || counted.has(node)) return 0;
+  if (!isUncountedLogicalExpression(node, counted)) return 0;
   const sequence = logicalSequence(node);
   for (const expression of sequence) counted.add(expression);
   return logicalSequenceCost(sequence);
+}
+
+function isUncountedLogicalExpression(node: ts.Node, counted: ReadonlySet<ts.BinaryExpression>): node is ts.BinaryExpression {
+  return isBooleanLogicalExpression(node) && !counted.has(node);
+}
+
+function isBooleanLogicalExpression(node: ts.Node): node is ts.BinaryExpression {
+  return isLogicalExpression(node) && node.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken;
 }
 
 function logicalSequenceCost(sequence: ts.BinaryExpression[]) {
@@ -161,6 +204,6 @@ function logicalSequenceCost(sequence: ts.BinaryExpression[]) {
 
 function logicalSequence(node: ts.Node): ts.BinaryExpression[] {
   if (ts.isParenthesizedExpression(node)) return logicalSequence(node.expression);
-  if (!isLogicalExpression(node) || node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) return [];
+  if (!isBooleanLogicalExpression(node)) return [];
   return [...logicalSequence(node.left), node, ...logicalSequence(node.right)];
 }

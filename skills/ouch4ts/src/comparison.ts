@@ -6,7 +6,8 @@ import ts from "typescript";
 import { readCache, writeCache } from "./cache.js";
 import { canonicalPath } from "./files.js";
 import { git } from "./git.js";
-import { analyzeProject, runCommand } from "./project.js";
+import { analyzeProject } from "./project.js";
+import { runCommand } from "./process.js";
 import type { ProjectOptions } from "./project.js";
 import { defaultSetupCommand } from "./package-manager.js";
 
@@ -37,7 +38,7 @@ async function comparisonPaths(options: ComparisonOptions, root: string) {
   async function projectPath(path: string) {
     const absolute = await canonicalPath(resolve(options.cwd, path));
     const fromRoot = relative(root, absolute);
-    if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
+    if (isOutsideRepository(fromRoot)) {
       throw new Error(`Comparison paths must stay inside the Git repository: ${path}`);
     }
     return relative(options.cwd, absolute) || ".";
@@ -48,10 +49,14 @@ async function comparisonPaths(options: ComparisonOptions, root: string) {
   };
 }
 
+function isOutsideRepository(path: string) {
+  return path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
+}
+
 async function settingsFingerprint(options: ComparisonOptions, root: string) {
   const analyzer = createHash("sha256");
   const extension = extname(import.meta.url);
-  for (const file of ["index", "cognitive", "recursion", "project", "files", "package-manager"]) {
+  for (const file of ["index", "cognitive", "recursion", "syntax", "lcov", "project", "discovery", "files", "package-manager", "manifest", "process"]) {
     analyzer.update(await readFile(new URL(file + extension, import.meta.url)));
   }
   return createHash("sha256").update(JSON.stringify({
@@ -64,13 +69,8 @@ async function settingsFingerprint(options: ComparisonOptions, root: string) {
 
 async function snapshot(commit: string, options: SnapshotOptions) {
   const cachePath = join(options.cwd, ".metrics/cache", `${commit}-${options.settingsKey}.json`);
-  if (!options.refresh) {
-    const cached = await readCache(cachePath, commit, options.settingsKey);
-    if (cached) {
-      console.error(`Using cached report for ${commit}`);
-      return cached;
-    }
-  }
+  const cached = await reusableSnapshot(cachePath, commit, options);
+  if (cached) return cached;
   const directory = await mkdtemp(join(tmpdir(), "ouch4ts-compare-"));
   const checkout = join(directory, "checkout");
   let added = false;
@@ -87,6 +87,13 @@ async function snapshot(commit: string, options: SnapshotOptions) {
     if (added) git(["worktree", "remove", "--force", checkout], options.root);
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+async function reusableSnapshot(path: string, commit: string, options: SnapshotOptions) {
+  if (options.refresh) return null;
+  const cached = await readCache(path, commit, options.settingsKey);
+  if (cached) console.error(`Using cached report for ${commit}`);
+  return cached;
 }
 
 function renamedFiles(base: string, head: string, root: string, cwd: string) {
@@ -134,9 +141,13 @@ function compareEntries(before: Metric[], after: Metric[], renames: Map<string, 
 }
 
 function compareGroup(group: MetricGroup) {
-  if (group.base.length === 1 && group.head.length === 1) return [comparisonEntry(group.base[0]!, group.head[0]!)];
+  if (isUniqueGroup(group)) return [comparisonEntry(group.base[0]!, group.head[0]!)];
   if (unchangedGroup(group)) return [];
   return [...group.base.map(entry => comparisonEntry(entry, null)), ...group.head.map(entry => comparisonEntry(null, entry))];
+}
+
+function isUniqueGroup(group: MetricGroup) {
+  return group.base.length === 1 && group.head.length === 1;
 }
 
 function unchangedGroup(group: MetricGroup) {
@@ -154,8 +165,7 @@ function groupScores(entries: Metric[]) {
 const scoreFields = ["complexity", "cognitive", "coverage", "crap", "ouch"] as const;
 
 function sameScores(base: Metric | null, head: Metric | null) {
-  if (base === null || head === null) return false;
-  return scoreFields.every(field => base[field] === head[field]);
+  return sameFieldValues(base, head, scoreFields);
 }
 
 function comparisonEntry(base: Metric | null, head: Metric | null) {
@@ -175,7 +185,11 @@ function unchangedEntry(base: Metric | null, head: Metric | null) {
 function comparisonStatus(base: object | null, head: object | null, same: boolean) {
   if (base === null) return "added";
   if (head === null) return "removed";
-  return same ? "renamed" : "changed";
+  return matchedEntryStatus(same);
+}
+
+function matchedEntryStatus(scoresUnchanged: boolean) {
+  return scoresUnchanged ? "renamed" : "changed";
 }
 
 function metricDeltas(base: Metric | null, head: Metric | null) {
@@ -213,23 +227,54 @@ function compareFiles(before: FileMetric[], after: FileMetric[], renames: Map<st
   return [...new Set([...base.keys(), ...head.keys()])]
     .map(file => fileComparisonEntry(base.get(file) ?? null, head.get(file) ?? null))
     .filter(entry => entry !== null)
-    .sort((a, b) => (b.delta.cognitive ?? 0) - (a.delta.cognitive ?? 0)
-      || (b.head?.cognitive ?? b.base?.cognitive ?? 0) - (a.head?.cognitive ?? a.base?.cognitive ?? 0)
-      || a.file.localeCompare(b.file));
+    .sort(compareFileChanges);
+}
+
+type FileComparisonEntry = NonNullable<ReturnType<typeof fileComparisonEntry>>;
+
+function compareFileChanges(a: FileComparisonEntry, b: FileComparisonEntry) {
+  return fileCognitiveDelta(b) - fileCognitiveDelta(a)
+    || fileCognitive(b) - fileCognitive(a) || a.file.localeCompare(b.file);
+}
+
+function fileCognitiveDelta(entry: FileComparisonEntry) {
+  return entry.delta.cognitive ?? 0;
+}
+
+function fileCognitive(entry: FileComparisonEntry) {
+  return entry.head?.cognitive ?? entry.base?.cognitive ?? 0;
 }
 
 function fileComparisonEntry(base: FileMetric | null, head: FileMetric | null) {
   const entry = head ?? base;
   if (entry === null) return null;
-  const same = base !== null && head !== null && base.complexity === head.complexity
-    && base.cognitive === head.cognitive && base.functions === head.functions;
-  if (same && base.file === head.file) return null;
+  if (unchangedFileEntry(base, head)) return null;
   return {
-    file: entry.file, status: comparisonStatus(base, head, same), base, head,
+    file: entry.file, status: comparisonStatus(base, head, sameFileScores(base, head)), base, head,
     delta: {
-      complexity: scoreDelta(base?.complexity ?? null, head?.complexity ?? null),
-      cognitive: scoreDelta(base?.cognitive ?? null, head?.cognitive ?? null),
-      functions: scoreDelta(base?.functions ?? null, head?.functions ?? null),
+      complexity: fileScoreDelta(base, head, "complexity"),
+      cognitive: fileScoreDelta(base, head, "cognitive"),
+      functions: fileScoreDelta(base, head, "functions"),
     },
   };
+}
+
+const fileScoreFields = ["complexity", "cognitive", "functions"] as const;
+
+function sameFileScores(base: FileMetric | null, head: FileMetric | null) {
+  return sameFieldValues(base, head, fileScoreFields);
+}
+
+function sameFieldValues<T extends object>(base: T | null, head: T | null, fields: readonly (keyof T)[]) {
+  return base !== null && head !== null && fields.every(field =>
+    base[field] === head[field]
+  );
+}
+
+function unchangedFileEntry(base: FileMetric | null, head: FileMetric | null) {
+  return sameFileScores(base, head) && base?.file === head?.file;
+}
+
+function fileScoreDelta(base: FileMetric | null, head: FileMetric | null, field: typeof fileScoreFields[number]) {
+  return scoreDelta(base?.[field] ?? null, head?.[field] ?? null);
 }
