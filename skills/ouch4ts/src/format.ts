@@ -16,10 +16,9 @@ export function formatDelta(value: number | null) {
 }
 
 export function formatTable(title: string, rows: string[][], leftColumns = 2) {
-  const widths = rows[0]!.map((_, column) => {
-    const lengths = rows.map(row => row[column]!.length);
-    return Math.max(...lengths);
-  });
+  const widths = rows[0]!.map((_, column) =>
+    rows.reduce((width, row) => Math.max(width, row[column]!.length), 0)
+  );
   const formatted = rows.map(row => {
     const columns = row.map((value, column) =>
       column < leftColumns ? value.padEnd(widths[column]!) : value.padStart(widths[column]!)
