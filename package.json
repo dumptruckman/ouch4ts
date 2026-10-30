@@ -1,12 +1,46 @@
 {
-  "name": "ouch4ts-workspace",
-  "private": true,
-  "workspaces": ["skills/ouch4ts"],
+  "name": "ouch4ts",
+  "version": "0.1.0",
+  "description": "OUCH scores for JavaScript and TypeScript functions",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dumptruckman/ouch4ts.git"
+  },
+  "type": "module",
+  "bin": {
+    "ouch4ts": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build": "npm run build --workspace ouch4ts",
-    "typecheck": "npm run typecheck --workspace ouch4ts",
-    "test": "npm run test --workspace ouch4ts --",
-    "test:coverage": "npm run test:coverage --workspace ouch4ts",
-    "ouch": "npm run ouch --workspace ouch4ts --"
+    "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "ouch": "npm run build --silent && node dist/cli.js",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "picomatch": "4.0.7",
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/picomatch": "4.0.3",
+    "@vitest/coverage-v8": "5.0.5",
+    "vitest": "5.0.5"
   }
 }
