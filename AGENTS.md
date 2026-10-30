@@ -1,6 +1,7 @@
 # Agent instructions
 
 Read `CODING_STANDARDS.md` before changing or reviewing code.
+Read `docs/agents/commit-guidelines.md` before making any commit.
 
 ## Agent skills
 
