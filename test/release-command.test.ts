@@ -1,0 +1,284 @@
+import { spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, expect, test } from "vitest";
+import { verifyRegistryArtifact } from "../scripts/release/publication.ts";
+import type { Release } from "../scripts/release/github.ts";
+import { recordSchema } from "../scripts/release/state.ts";
+
+const cleanups: (() => Promise<unknown>)[] = [];
+afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+
+async function fixture() {
+  const root = await mkdtemp(path.join(tmpdir(), "ouch-release-"));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  git("init", "--initial-branch=main");
+  git("config", "user.name", "Test");
+  git("config", "user.email", "test@example.com");
+  git("config", "commit.gpgsign", "false");
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "ouch4ts", version: "0.1.0", license: "MIT", type: "module", files: ["dist"], scripts: { build: "node build.mjs" } }));
+  await writeFile(path.join(root, "README.md"), "# Test package\n");
+  await writeFile(path.join(root, "LICENSE"), "MIT\n");
+  await mkdir(path.join(root, ".changeset"));
+  await writeFile(path.join(root, ".changeset/config.json"), await readFile(path.resolve(".changeset/config.json")));
+  await writeFile(path.join(root, "build.mjs"), `import { mkdirSync, writeFileSync } from 'node:fs';
+mkdirSync('dist', {recursive:true});
+writeFileSync('dist/cli.js', "import {readFileSync} from 'node:fs'; console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version);");
+writeFileSync('dist/index.js', 'export function analyze() {return [];} export function analyzeReport() {return {entries:[],files:[]};}');
+writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];');
+`);
+  git("add", "."); git("commit", "-m", "Baseline");
+  const baseline = git("rev-parse", "HEAD");
+  git("tag", "v0.1.0");
+  await writeFile(path.join(root, "change"), "one");
+  git("add", "."); git("commit", "-m", "First change");
+  const source = git("rev-parse", "HEAD");
+  const pr = { number: 1, title: "First change", body: "A change", url: "https://github.com/test/repo/pull/1", labels: ["release:patch"], head: "first", repository: "test/repo", author: "human" };
+  const releases: (Release & { name: string })[] = [
+    { id: 1, tag_name: "v0.1.0", name: "Baseline", draft: false, target_commitish: baseline, body: "Baseline", assets: [] },
+    { id: 2, tag_name: `record-${source}`, name: "Record", draft: true, target_commitish: source, body: JSON.stringify({ schema: 1, source, branch: "main", state: "recorded", pr }), assets: [] },
+  ];
+  const requests: string[] = [];
+  const registry = { value: {} as unknown, status: 404, version: "0.1.1", tarball: Buffer.alloc(0), tags: { latest: "0.1.0" } as Record<string, string>, publishCount: 0, ambiguousPublish: false, failFinalization: false };
+  const assets = new Map<number, Buffer>();
+  const refs = new Map<string, string>();
+  let baseUrl = "";
+  const bodyBytes = async (req: import("node:http").IncomingMessage) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    return Buffer.concat(chunks);
+  };
+  const server = createServer(async (req, res) => {
+    requests.push(`${req.method} ${req.url}`);
+    res.setHeader("Content-Type", "application/json");
+    if (req.url === `/ouch4ts/${registry.version}`) { res.statusCode = registry.status; res.end(JSON.stringify(registry.value)); return; }
+    if (req.url === "/-/package/ouch4ts/dist-tags") { res.end(JSON.stringify(registry.tags)); return; }
+    if (req.url === "/tarball") { res.end(registry.tarball); return; }
+    if (req.url === "/attestations") {
+      const publication = [...releases].flatMap((release) => release.assets).find((asset) => asset.name === "publication.json" && JSON.parse(assets.get(asset.id)?.toString() ?? "{}").version === registry.version);
+      const source = publication ? JSON.parse(assets.get(publication.id)?.toString() ?? "{}").source : "";
+      const statement = { subject: [{ digest: { sha512: createHash("sha512").update(registry.tarball).digest("hex") } }], predicate: { buildDefinition: { externalParameters: { workflow: { repository: "https://github.com/test/repo", path: ".github/workflows/release.yml", ref: "refs/heads/main" } }, resolvedDependencies: [{ uri: "git+https://github.com/test/repo@refs/heads/main", digest: { gitCommit: source } }] } } };
+      res.end(JSON.stringify({ attestations: [{ predicateType: "https://slsa.dev/provenance/v1", bundle: { dsseEnvelope: { payload: Buffer.from(JSON.stringify(statement)).toString("base64") } } }] })); return;
+    }
+    if (req.url === "/npm/publish" && req.method === "PUT") {
+      registry.tarball = await bodyBytes(req); registry.version = String(req.headers["x-version"]);
+      registry.publishCount++; registry.status = 200;
+      registry.value = { version: registry.version, dist: { integrity: `sha512-${createHash("sha512").update(registry.tarball).digest("base64")}`, tarball: `${baseUrl}/tarball`, attestations: { url: `${baseUrl}/attestations` } } };
+      registry.tags[String(req.headers["x-channel"])] = registry.version;
+      res.statusCode = registry.ambiguousPublish ? 500 : 200; res.end("{}"); return;
+    }
+    if (req.url === "/npm/tag" && req.method === "POST") {
+      const data = JSON.parse((await bodyBytes(req)).toString()); registry.tags[data.channel] = data.version; res.end("{}"); return;
+    }
+    if (req.url?.startsWith("/repos/test/repo/releases?")) { res.end(JSON.stringify(releases)); return; }
+    if (req.url === "/repos/test/repo/releases" && req.method === "POST") {
+      const data = JSON.parse((await bodyBytes(req)).toString());
+      const release = { ...data, id: releases.length + 1, assets: [] }; releases.push(release); res.end(JSON.stringify(release)); return;
+    }
+    const upload = req.url?.match(/^\/repos\/test\/repo\/releases\/(\d+)\/assets\?name=(.+)$/);
+    if (upload && req.method === "POST") {
+      const release = releases.find((entry) => entry.id === Number(upload[1]));
+      if (!release) { res.statusCode = 404; res.end("{}"); return; }
+      const id = assets.size + 1, name = decodeURIComponent(upload[2] ?? "");
+      assets.set(id, await bodyBytes(req));
+      const asset = { id, name, url: `${baseUrl}/repos/test/repo/releases/assets/${id}`, browser_download_url: `${baseUrl}/asset/${id}` };
+      release.assets.push(asset); res.end(JSON.stringify(asset)); return;
+    }
+    const asset = req.url?.match(/^\/repos\/test\/repo\/releases\/assets\/(\d+)$/);
+    if (asset) { res.end(assets.get(Number(asset[1]))); return; }
+    if (req.url === "/repos/test/repo/git/refs" && req.method === "POST") {
+      const data = JSON.parse((await bodyBytes(req)).toString()); refs.set(data.ref, data.sha); res.end("{}"); return;
+    }
+    const ref = req.url?.match(/^\/repos\/test\/repo\/git\/ref\/(.+)$/);
+    if (ref && refs.has(`refs/${ref[1]}`)) { res.end(JSON.stringify({ object: { type: "commit", sha: refs.get(`refs/${ref[1]}`) } })); return; }
+    const match = req.url?.match(/^\/repos\/test\/repo\/releases\/(\d+)$/);
+    if (match && req.method === "GET") { res.end(JSON.stringify(releases.find((entry) => entry.id === Number(match[1])))); return; }
+    if (match && req.method === "PATCH") {
+      const data: unknown = JSON.parse((await bodyBytes(req)).toString());
+      const release = releases.find((entry) => entry.id === Number(match[1]));
+      if (registry.failFinalization && release?.tag_name.startsWith("v") && data && typeof data === "object" && "draft" in data && data.draft === false) { res.statusCode = 500; res.end("{}"); return; }
+      if (release && data && typeof data === "object") { Object.assign(release, data); res.end(JSON.stringify(release)); return; }
+    }
+    res.statusCode = 404; res.end(JSON.stringify({ message: "Not found" }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  cleanups.push(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("Missing test server address");
+  baseUrl = `http://127.0.0.1:${address.port}`;
+  const bin = path.join(root, "bin"); await mkdir(bin);
+  const realNpm = path.resolve(path.dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js");
+  await writeFile(path.join(bin, "npm"), `#!${process.execPath}
+import {readFileSync} from 'node:fs'; import {execFileSync,spawnSync} from 'node:child_process';
+const args=process.argv.slice(2), registry=process.env.NPM_CONFIG_REGISTRY;
+if(args[0]==='publish') {
+ const bytes=readFileSync(args[1]); const pkg=JSON.parse(execFileSync('tar',['-xOf',args[1],'package/package.json'],{encoding:'utf8'}));
+ const r=await fetch(registry+'/npm/publish',{method:'PUT',headers:{'x-version':pkg.version,'x-channel':args[args.indexOf('--tag')+1]},body:bytes}); process.exit(r.ok?0:1);
+} else if(args[0]==='dist-tag') {
+ const r=await fetch(registry+'/npm/tag',{method:'POST',body:JSON.stringify({version:args[2].split('@')[1],channel:args[3]})});process.exit(r.ok?0:1);
+} else {const r=spawnSync(process.execPath,[${JSON.stringify(realNpm)},...args],{stdio:'inherit'});process.exit(r.status??1);}
+`, { mode: 0o755 });
+  await writeFile(path.join(bin, "package.json"), '{"type":"module"}');
+  const eventFile = path.join(root, "event.json");
+  await writeFile(eventFile, JSON.stringify({ before: baseline, after: source }));
+  const run = async (command: string, environment: NodeJS.ProcessEnv = {}) => {
+    const child = spawn(process.execPath, [path.resolve("scripts/release.ts"), command], {
+      cwd: root,
+      env: { ...process.env, GH_TOKEN: "test", GITHUB_API_URL: `http://127.0.0.1:${address.port}`, GITHUB_REPOSITORY: "test/repo", GITHUB_SHA: source, GITHUB_EVENT_PATH: eventFile, GITHUB_EVENT_NAME: "push", GITHUB_RUN_ID: "123", RELEASE_BRANCH: "main", RELEASE_BASELINE_TAG: "v0.1.0", ...environment },
+    });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+    return { code, stdout, stderr };
+  };
+  const publisherEnv = { GITHUB_ACTIONS: "true", GITHUB_WORKFLOW_REF: "test/repo/.github/workflows/release.yml@refs/heads/main", NPM_CONFIG_REGISTRY: baseUrl, PATH: `${bin}:${process.env.PATH}` };
+  return { root, git, baseline, source, releases, requests, run, pr, eventFile, registry, registryUrl: baseUrl, publisherEnv };
+}
+
+test("the release command plans an exact source from a frozen merge record", async () => {
+  const f = await fixture();
+  const result = await f.run("plan");
+  expect(result.stderr).toBe("");
+  expect(result.code).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ source: f.source, version: "0.1.1", bump: "patch", changes: [{ number: 1, labels: ["release:patch"] }] });
+  expect(f.requests.every((request) => request.startsWith("GET "))).toBe(true);
+});
+
+test("an ambiguous npm success recovers the original preview and never publishes twice", async () => {
+  const f = await fixture();
+  f.registry.ambiguousPublish = true;
+  const first = await f.run("publish", f.publisherEnv);
+  expect(first.stderr).toBe(""); expect(first.code).toBe(0);
+  expect(f.registry.version).toBe("0.1.1-preview.123");
+  expect(f.registry.publishCount).toBe(1);
+  const retry = await f.run("publish", { ...f.publisherEnv, GITHUB_RUN_ID: "999" });
+  expect(retry.stderr).toBe(""); expect(retry.code).toBe(0);
+  expect(f.registry.publishCount).toBe(1);
+  expect(f.registry.version).toBe("0.1.1-preview.123");
+  const record = f.releases.find((release) => release.tag_name === `record-${f.source}`);
+  expect(JSON.parse(record?.body ?? "{}")).toMatchObject({ runId: "123", state: "preview verified" });
+  expect(record?.assets.map((asset) => asset.name).sort()).toEqual(["SHA256SUMS", "ouch4ts.tgz", "publication.json"]);
+}, 20000);
+
+test("stable recovery finishes GitHub after npm success without changing version or rewinding latest", async () => {
+  const f = await fixture();
+  expect((await f.run("publish", f.publisherEnv)).code).toBe(0);
+  const previous = f.releases.find((release) => release.tag_name === `record-${f.source}`);
+  if (!previous) throw new Error("Missing merge record");
+  const record = recordSchema.parse(JSON.parse(previous.body ?? "{}"));
+  if (record.state === "recorded") throw new Error("Preview was not planned");
+  previous.body = JSON.stringify({ ...record, state: "proposal current" });
+  await mkdir(path.join(f.root, ".release"));
+  await writeFile(path.join(f.root, ".release/plan.json"), JSON.stringify(record.plan));
+  const pkg: unknown = JSON.parse(await readFile(path.join(f.root, "package.json"), "utf8"));
+  if (!pkg || typeof pkg !== "object") throw new Error("Invalid fixture package");
+  await writeFile(path.join(f.root, "package.json"), JSON.stringify({ ...pkg, version: "0.1.1" }));
+  await writeFile(path.join(f.root, "package-lock.json"), JSON.stringify({ name: "ouch4ts", version: "0.1.1", lockfileVersion: 3, packages: { "": { name: "ouch4ts", version: "0.1.1" } } }));
+  f.git("add", "package.json", "package-lock.json", ".release/plan.json"); f.git("commit", "-m", "Release proposal");
+  const stableSource = f.git("rev-parse", "HEAD");
+  f.releases.push({ id: 3, name: "Stable record", draft: true, tag_name: `record-${stableSource}`, target_commitish: stableSource, assets: [], body: JSON.stringify({ schema: 1, source: stableSource, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, title: "Release ouch4ts", head: "changeset-release/main", author: "github-actions[bot]" } }) });
+  await writeFile(f.eventFile, JSON.stringify({ before: f.source, after: stableSource }));
+  const env = { ...f.publisherEnv, GITHUB_SHA: stableSource, GITHUB_RUN_ID: "124" };
+  await writeFile(path.join(f.root, ".release/plan.json"), JSON.stringify({ ...record.plan, source: f.baseline }));
+  expect((await f.run("plan", env)).stderr).toContain("stale");
+  await writeFile(path.join(f.root, ".release/plan.json"), JSON.stringify(record.plan));
+  f.registry.failFinalization = true;
+  const failed = await f.run("publish", env);
+  expect(failed.stderr).toContain("500"); expect(failed.code).toBe(1);
+  expect(f.registry.publishCount).toBe(2);
+  expect(f.registry.version).toBe("0.1.1");
+  f.registry.tags.latest = "0.2.0";
+  f.registry.failFinalization = false;
+  const recovered = await f.run("publish", { ...env, GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_RUN_ID: "999" });
+  expect(recovered.stderr).toBe(""); expect(recovered.code).toBe(0);
+  expect(f.registry.publishCount).toBe(2);
+  expect(f.registry.tags.latest).toBe("0.2.0");
+  const stable = f.releases.find((release) => release.tag_name === "v0.1.1");
+  expect(stable?.draft).toBe(false);
+  expect(stable?.body).toContain(stableSource);
+  expect(stable?.body).toContain("A change");
+  expect(JSON.parse(f.releases.find((release) => release.tag_name === `record-${stableSource}`)?.body ?? "{}")).toMatchObject({ state: "github complete", runId: "124", kind: "stable" });
+}, 20000);
+
+test("registry recovery distinguishes absent, conflicting, and unverified artifacts", async () => {
+  const f = await fixture();
+  const input = { registry: f.registryUrl, version: "0.1.1", source: f.source, integrity: "sha512-correct", repository: "test/repo" };
+  expect(await verifyRegistryArtifact(input)).toBe(false);
+  f.registry.status = 500;
+  await expect(verifyRegistryArtifact(input)).rejects.toThrow(/500/);
+  f.registry.status = 200;
+  f.registry.value = { version: "0.1.1", dist: { integrity: "sha512-other", attestations: { url: `${f.registryUrl}/attestations` } } };
+  await expect(verifyRegistryArtifact(input)).rejects.toThrow(/different contents/);
+  f.registry.value = { version: "0.1.1", dist: { integrity: "sha512-correct" } };
+  await expect(verifyRegistryArtifact(input)).rejects.toThrow(/provenance/);
+});
+
+test("an out-of-order run refuses to skip an unfinished predecessor", async () => {
+  const f = await fixture();
+  await writeFile(path.join(f.root, "change"), "two");
+  f.git("add", "change"); f.git("commit", "-m", "Second change");
+  const next = f.git("rev-parse", "HEAD");
+  f.releases.push({ id: 3, tag_name: `record-${next}`, name: "Second record", draft: true, target_commitish: next, body: JSON.stringify({ schema: 1, source: next, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, labels: ["release:minor"] } }), assets: [] });
+  await writeFile(f.eventFile, JSON.stringify({ before: f.source, after: next }));
+  const result = await f.run("plan", { GITHUB_SHA: next });
+  expect(result.code).toBe(1);
+  expect(result.stderr).toContain("Unfinished predecessor");
+  expect(f.requests.every((request) => request.startsWith("GET "))).toBe(true);
+});
+
+test.each(["no release", "release:minor"])("a following %s merge refreshes the complete pending plan", async (label) => {
+  const f = await fixture();
+  const first = f.releases.find((release) => release.id === 2);
+  if (!first) throw new Error("Missing fixture record");
+  const previousPlan: unknown = JSON.parse((await f.run("plan")).stdout);
+  first.body = JSON.stringify({ schema: 1, source: f.source, branch: "main", state: "proposal current", before: f.baseline, runId: "122", kind: "ordinary", plan: previousPlan, pr: f.pr });
+  await writeFile(path.join(f.root, "change"), "two");
+  f.git("add", "change"); f.git("commit", "-m", "Second change");
+  const next = f.git("rev-parse", "HEAD");
+  f.releases.push({ id: 3, tag_name: `record-${next}`, name: "Second record", draft: true, target_commitish: next, body: JSON.stringify({ schema: 1, source: next, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, labels: [label] } }), assets: [] });
+  await writeFile(f.eventFile, JSON.stringify({ before: f.source, after: next }));
+  const result = await f.run("prepare", { GITHUB_SHA: next });
+  expect(result.stderr).toBe("");
+  expect(result.code).toBe(0);
+  const expectedVersion = label === "release:minor" ? "0.2.0" : "0.1.1";
+  expect(JSON.parse(await readFile(path.join(f.root, ".release/plan.json"), "utf8"))).toMatchObject({ source: next, version: expectedVersion, changes: [{ number: 1 }, { number: 2 }] });
+  expect(await readFile(path.join(f.root, ".changeset/pr-1.md"), "utf8")).toContain('"ouch4ts": patch');
+});
+
+test("direct pushes and substituted workflow source SHAs fail before mutation", async () => {
+  const f = await fixture();
+  expect((await f.run("plan", { GITHUB_SHA: f.baseline })).stderr).toContain("provenance source SHA");
+  f.releases.splice(1);
+  expect((await f.run("plan")).stderr).toContain("Direct pushes cannot release");
+  expect(f.requests.every((request) => request.startsWith("GET "))).toBe(true);
+});
+
+test("Changesets consumes generated inputs and synchronizes the package and lockfile", async () => {
+  const f = await fixture();
+  expect((await f.run("prepare")).code).toBe(0);
+  const versioned = await f.run("version", f.publisherEnv);
+  expect(versioned.code, versioned.stderr).toBe(0);
+  expect(JSON.parse(await readFile(path.join(f.root, "package.json"), "utf8"))).toMatchObject({ version: "0.1.1" });
+  expect(JSON.parse(await readFile(path.join(f.root, "package-lock.json"), "utf8"))).toMatchObject({ version: "0.1.1", packages: { "": { version: "0.1.1" } } });
+  expect(await readFile(path.join(f.root, "CHANGELOG.md"), "utf8")).toContain("First change");
+  expect(await readdir(path.join(f.root, ".changeset"))).toEqual(["config.json"]);
+}, 15000);
+
+test("an all-no-release pending set neither publishes nor creates a proposal", async () => {
+  const f = await fixture();
+  const current = f.releases.find((release) => release.tag_name === `record-${f.source}`);
+  if (!current) throw new Error("Missing merge record");
+  current.body = JSON.stringify({ schema: 1, source: f.source, branch: "main", state: "recorded", pr: { ...f.pr, labels: ["no release"] } });
+  const output = path.join(f.root, "outputs");
+  const result = await f.run("publish", { ...f.publisherEnv, GITHUB_OUTPUT: output });
+  expect(result.code, result.stderr).toBe(0);
+  expect(f.registry.publishCount).toBe(0);
+  expect(current.assets).toEqual([]);
+  expect(await readFile(output, "utf8")).toContain("proposal=false");
+});

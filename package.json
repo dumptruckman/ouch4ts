@@ -25,9 +25,10 @@
     "node": ">=22"
   },
   "scripts": {
+    "release:version": "node scripts/release.ts version",
     "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\"",
     "build": "npm run clean && tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "ouch": "npm run build --silent && node dist/cli.js",
@@ -38,9 +39,13 @@
     "typescript": "6.0.3"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@types/node": "24.19.2",
     "@types/picomatch": "4.0.3",
+    "@types/semver": "7.8.0",
     "@vitest/coverage-v8": "5.0.5",
-    "vitest": "5.0.5"
+    "semver": "7.8.6",
+    "vitest": "5.0.5",
+    "zod": "4.6.7"
   }
 }

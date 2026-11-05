@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    branches: [main, 'maintenance/*']
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Original target branch, main or maintenance/<major>.<minor>
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+
+concurrency:
+  group: npm-publications
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  publish:
+    if: vars.RELEASES_ENABLED == 'true' && !github.event.created && !github.event.deleted
+    runs-on: ubuntu-24.04
+    environment: npm-release
+    permissions:
+      contents: write
+      pull-requests: read
+      id-token: write
+    outputs:
+      proposal: ${{ steps.publish.outputs.proposal }}
+      branch: ${{ steps.publish.outputs.branch }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
+      - run: npm install --global npm@12.2.1 --ignore-scripts
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+      - id: publish
+        run: node scripts/release.ts publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ inputs.branch || github.ref_name }}
+          RELEASE_BASELINE_TAG: ${{ vars.RELEASE_BASELINE_TAG }}
+  proposal:
+    needs: publish
+    if: needs.publish.outputs.proposal == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: node scripts/release.ts prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ needs.publish.outputs.branch }}
+          RELEASE_BASELINE_TAG: ${{ vars.RELEASE_BASELINE_TAG }}
+      - id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d
+        with:
+          branch: ${{ needs.publish.outputs.branch }}
+          commitMode: github-api
+          version: npm run release:version
+          title: Release ouch4ts
+          commit: Prepare ouch4ts release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: node scripts/release.ts proposal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ needs.publish.outputs.branch }}
+          RELEASE_BASELINE_TAG: ${{ vars.RELEASE_BASELINE_TAG }}
+          RELEASE_PR: ${{ steps.changesets.outputs.pullRequestNumber }}

@@ -1,0 +1,48 @@
+name: Record merged release labels
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main, 'maintenance/*']
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    if: github.event.pull_request.merged && vars.RELEASES_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      # No checkout, package installation, or execution of PR-controlled code.
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const tag = `record-${pr.merge_commit_sha}`;
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              ...context.repo, per_page: 100,
+            });
+            if (releases.some(release => release.tag_name === tag)) return;
+            const record = {
+              schema: 1,
+              source: pr.merge_commit_sha,
+              branch: pr.base.ref,
+              state: 'recorded',
+              pr: {
+                number: pr.number,
+                title: pr.title,
+                body: pr.body ?? '',
+                url: pr.html_url,
+                labels: pr.labels.map(label => label.name),
+                head: pr.head.ref,
+                repository: pr.head.repo?.full_name ?? '',
+                author: pr.user.login,
+              },
+            };
+            await github.rest.repos.createRelease({
+              ...context.repo, tag_name: tag, target_commitish: record.source,
+              name: `Release record ${record.source}`, draft: true,
+              body: JSON.stringify(record, null, 2),
+            });

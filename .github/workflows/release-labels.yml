@@ -1,0 +1,29 @@
+name: Release labels
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled, edited, ready_for_review]
+    branches: [main, 'maintenance/*']
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  labels:
+    name: Release labels
+    runs-on: ubuntu-24.04
+    steps:
+      # Always execute trusted base code, including for fork PRs.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: node scripts/release.ts labels
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -210,6 +210,16 @@ CLI tests exercise the command handler against temporary projects so coverage in
 
 `npm run build` clears `dist` before compilation and rejects type errors. `npm pack` builds the package and includes compiled JavaScript, TypeScript declarations, this README, package metadata, and the MIT license. Source files, tests, source maps, and skill assets are excluded.
 
+## Releases
+
+Every PR selects exactly one of `release:major`, `release:minor`, `release:patch`, or `no release`. Labels determine versions; commit messages do not. Feature authors do not write changeset files.
+
+After publishing is enabled, eligible merges to `main` publish npm previews under `preview`. A rolling Changesets PR gathers pending changes using their highest requested bump. Merging a current, approved release PR publishes the stable package. A `no release` merge refreshes a pending proposal without publishing a preview.
+
+Maintenance branches use `maintenance/<major>.<minor>` and accept only patch releases or `no release`. Their npm channels are `preview-<major>.<minor>` and `release-<major>.<minor>`. The `latest` channel never moves backward. Backports are manual.
+
+Publishing stays disabled until the account and repository setup is complete. See [enable npm releases](docs/release-setup.md) and [recover a release](docs/release-recovery.md).
+
 ## Licenses
 
 The analyzer and root npm package use the [MIT license](https://github.com/dumptruckman/ouch4ts/blob/main/LICENSE). The companion skill and everything under `skills/ouch4ts` use the separate [0BSD license](https://github.com/dumptruckman/ouch4ts/blob/main/skills/ouch4ts/LICENSE). Skill assets are not distributed in the analyzer's npm package.
