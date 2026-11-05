@@ -7,6 +7,7 @@ Read `docs/agents/commit-guidelines.md` before making any commit.
 
 - Use the `implement` skill whenever the user asks to build something that involves code changes.
 - Use the `writing-for-agents` skill whenever updating `AGENTS.md` or the `ouch4ts` skill in `skills/ouch4ts/`.
+- Use the `technical-writing` skill whenever creating or updating human-facing documentation, including `README.md`.
 
 ### Issue tracker
 
