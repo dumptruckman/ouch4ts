@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import picomatch from "picomatch";
 import { analyzeReport } from "./index.js";
-import { reportStamp } from "./files.js";
+import { canonicalRepositoryPath, reportStamp } from "./files.js";
 import { discoverSources } from "./discovery.js";
 import { runCommand } from "./process.js";
 import { defaultCoverageCommand } from "./package-manager.js";
@@ -14,14 +14,38 @@ export interface ProjectOptions {
   lcov: string;
   coverageCommand: string | undefined;
   useExistingCoverage: boolean;
+  repositoryRoot?: string;
+}
+
+export function warnUnknownCoverage(entries: Awaited<ReturnType<typeof analyzeProject>>["entries"], context = "") {
+  const unknown = entries.filter(entry => entry.coverage === null).length;
+  if (unknown) console.error(`Warning: ${unknown} functions have N/A coverage${context}. Check LCOV source paths and source maps.`);
 }
 
 export async function analyzeProject(options: ProjectOptions) {
-  const paths = await projectSourcePaths(options);
   const reportPath = resolve(options.cwd, options.lcov);
+  await validateRepositoryInputs(options);
   if (!options.useExistingCoverage) await updateCoverage(options, reportPath);
+  await validateRepositoryInputs(options);
+  const paths = await projectSourcePaths(options);
   const sources = await Promise.all(paths.map(async path => ({ path, text: await readFile(path, "utf8") })));
-  return analyzeReport({ sources, lcov: await readFile(reportPath, "utf8"), projectRoot: options.cwd });
+  return analyzeReport({ sources, lcov: await readCoverage(reportPath), projectRoot: options.cwd });
+}
+
+async function validateRepositoryInputs({ cwd, sourceRoots, lcov, repositoryRoot }: ProjectOptions) {
+  if (repositoryRoot === undefined) return;
+  await Promise.all([".", ...sourceRoots, lcov].map(path =>
+    canonicalRepositoryPath(resolve(cwd, path), repositoryRoot)
+  ));
+}
+
+async function readCoverage(path: string) {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Cannot read LCOV: ${message}. Generate original-source LCOV or select its path with --lcov.`);
+  }
 }
 
 async function projectSourcePaths(options: ProjectOptions) {
@@ -37,5 +61,7 @@ async function updateCoverage({ cwd, lcov, coverageCommand }: ProjectOptions, re
   const before = await reportStamp(reportPath);
   runCommand(coverageCommand ?? await defaultCoverageCommand(cwd), cwd, "Coverage");
   const after = await reportStamp(reportPath);
-  if (after === null || before === after) throw new Error(`Coverage command did not update ${lcov}`);
+  if (after === null || before === after) {
+    throw new Error(`Coverage command did not update ${lcov}. Generate original-source LCOV or select the updated report with --lcov.`);
+  }
 }

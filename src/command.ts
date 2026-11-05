@@ -1,9 +1,13 @@
-import { mkdir, realpath, writeFile } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { changedSourceFilter } from "./changes.js";
-import { analyzeProject } from "./project.js";
+import { analyzeProject, warnUnknownCoverage } from "./project.js";
 import { compareProject } from "./comparison.js";
+import { loadConfiguration } from "./configuration.js";
+import { readManifest } from "./manifest.js";
+import { writeJson } from "./files.js";
 import { formatCoverage, formatDelta, formatPair, formatScore, formatTable } from "./format.js";
 
 /** Report command errors and return the process exit code. */
@@ -24,10 +28,16 @@ function errorMessage(error: unknown) {
 function parseOptions(args: string[]) {
   return parseArgs({ args, allowPositionals: true, options: {
     help: { type: "boolean", short: "h" },
+    version: { type: "boolean" },
+    format: { type: "string" },
+    project: { type: "string" },
+    config: { type: "string" },
+    "no-config": { type: "boolean" },
+    "output-dir": { type: "string" },
     "use-existing-coverage": { type: "boolean" },
     "source-root": { type: "string", multiple: true },
     exclude: { type: "string", multiple: true },
-    lcov: { type: "string", default: "coverage/lcov.info" },
+    lcov: { type: "string" },
     "coverage-command": { type: "string" },
     since: { type: "string" },
     compare: { type: "string" },
@@ -42,6 +52,9 @@ export async function runCli(args: string[], cwd: string) {
   if (values.help) {
     console.log(`Usage: ouch4ts [options] [path-fragment ...]
 
+  --project <directory>     Project to analyze. Default: launching directory
+  --config <file>           JSON config, relative to launching directory
+  --no-config               Ignore project-local ouch4ts.config.json
   --source-root <path>       Source directory, repeatable. Default: src
   --exclude <glob>           Exclude project-relative paths, repeatable. Quote globs.
   --lcov <path>              LCOV report. Default: coverage/lcov.info
@@ -51,47 +64,62 @@ export async function runCli(args: string[], cwd: string) {
   --compare <ref>           Compare merge-base and HEAD scores in temporary checkouts
   --setup-command <cmd>      Comparison setup. Default: detected manager's frozen install
   --refresh                 Regenerate both comparison reports instead of using cache
+  --format <table|json>      Stdout format. Default: table
+  --output-dir <directory>  Report and comparison cache storage. Default: .metrics
+  --version                 Show the package version
   -h, --help                Show this help
 
-File tables sort by cognitive complexity or its delta. Function tables sort by OUCH or its delta.
-Cog follows the Cognitive Complexity whitepaper and includes nested functions.
-OUCH means Overall Upkeep and Change Hassle, derived from CRAP.
-CRAP combines cyclomatic complexity and line coverage; OUCH adds cognitive complexity.
-Path fragments filter the table. Normal reports write .metrics/ouch.json;
-comparisons write .metrics/ouch-comparison.json and cache full commit reports.`);
+Paths and commands use the selected project. Config overrides defaults; flags override config.
+Repeated flags replace configured lists. Case-sensitive path fragments filter stdout with OR matching.
+File rows sort by cognitive complexity or its delta; function rows sort by OUCH or its delta.
+Complete reports write ouch.json or ouch-comparison.json in the output directory.
+Fresh coverage runs a shell command; comparisons also install dependencies in temporary checkouts.
+Diagnostics and command output use stderr. Failures exit 1; unknown coverage stays null/N/A.`);
+    return;
+  }
+  if (values.version) {
+    const manifest = await readManifest(fileURLToPath(new URL("../", import.meta.url)));
+    if (typeof manifest.version !== "string") throw new Error("Package version is missing");
+    console.log(manifest.version);
     return;
   }
   validateReportMode(values);
-  cwd = await realpath(cwd);
-  const options = projectOptions(values, cwd);
+  const format = reportFormat(values.format);
+  const configPath = values.config === undefined ? undefined : resolve(cwd, values.config);
+  cwd = await realpath(resolve(cwd, values.project ?? "."));
+  const config = await loadConfiguration(cwd, configPath, values["no-config"] ?? false);
+  const options = projectOptions(values, cwd, config);
   if (values.compare !== undefined) {
     const report = await compareProject(values.compare, {
-      ...options, setupCommand: values["setup-command"], refresh: values.refresh ?? false,
+      ...options, refresh: values.refresh ?? false,
     });
-    await writeReport(cwd, "ouch-comparison.json", report);
+    await writeReport(options.outputDir, "ouch-comparison.json", report);
     const files = report.files.filter(entry => matchesPath(entry.file, positionals));
     const entries = report.entries.filter(entry => matchesPath(entry.file, positionals));
-    console.log(formatFileComparison(files) + "\n\n" + formatComparison(entries));
+    console.log(format === "json" ? JSON.stringify({ ...report, entries, files })
+      : formatFileComparison(files) + "\n\n" + formatComparison(entries));
     return;
   }
-  await reportCurrent(options, values.since, positionals);
+  await reportCurrent(options, values.since, positionals, format);
 }
 
-async function reportCurrent(options: Parameters<typeof analyzeProject>[0], since: string | undefined, positionals: string[]) {
+function reportFormat(value: string | undefined) {
+  if (value === undefined || value === "table") return "table";
+  if (value === "json") return "json";
+  throw new Error("--format must be table or json");
+}
+
+async function reportCurrent(options: ReturnType<typeof projectOptions>, since: string | undefined,
+  positionals: string[], format: ReturnType<typeof reportFormat>) {
   const changes = since === undefined ? undefined : changedSourceFilter(since, options.cwd);
   const report = await analyzeProject(options);
-  await writeReport(options.cwd, "ouch.json", report);
+  await writeReport(options.outputDir, "ouch.json", report);
   const entries = report.entries.filter(entry => changes?.matchesFunction(entry) ?? true)
     .filter(entry => matchesPath(entry.file, positionals));
   const files = report.files.filter(entry => changes?.matchesFile(entry.file) ?? true)
     .filter(entry => matchesPath(entry.file, positionals));
-  console.log(formatFiles(files) + "\n\n" + formatReport(entries));
+  console.log(format === "json" ? JSON.stringify({ entries, files }) : formatFiles(files) + "\n\n" + formatReport(entries));
   warnUnknownCoverage(report.entries);
-}
-
-function warnUnknownCoverage(entries: Metric[]) {
-  const unknown = entries.filter(entry => entry.coverage === null).length;
-  if (unknown) console.error(`Warning: ${unknown} functions have N/A coverage. Check LCOV source paths and source maps.`);
 }
 
 function formatFiles(files: Awaited<ReturnType<typeof analyzeProject>>["files"]) {
@@ -146,6 +174,12 @@ type CliValues = ReturnType<typeof parseOptions>["values"];
 
 function validateReportMode(values: CliValues) {
   validateNonEmptyOptions(values);
+  if (values.config !== undefined && values["no-config"]) {
+    throw new Error("--config cannot combine with --no-config");
+  }
+  if (values["coverage-command"] !== undefined && values["use-existing-coverage"]) {
+    throw new Error("--coverage-command cannot combine with --use-existing-coverage");
+  }
   if (values.compare === undefined) return validateCurrentReport(values);
   if (hasCurrentReportOptions(values)) {
     throw new Error("--compare cannot combine with --since or --use-existing-coverage");
@@ -154,6 +188,7 @@ function validateReportMode(values: CliValues) {
 
 function validateCurrentReport(values: CliValues) {
   if (values.refresh) throw new Error("--refresh requires --compare");
+  if (values["setup-command"] !== undefined) throw new Error("--setup-command requires --compare");
 }
 
 function hasCurrentReportOptions(values: CliValues) {
@@ -162,19 +197,25 @@ function hasCurrentReportOptions(values: CliValues) {
 
 function validateNonEmptyOptions(values: CliValues) {
   for (const pattern of values.exclude ?? []) validateNonEmptyValue("exclude", pattern);
-  for (const option of ["coverage-command", "setup-command"] as const) {
+  for (const root of values["source-root"] ?? []) validateNonEmptyValue("source-root", root);
+  for (const option of ["project", "config", "output-dir", "lcov", "since", "compare", "coverage-command", "setup-command"] as const) {
     validateNonEmptyValue(option, values[option]);
   }
 }
 
 function validateNonEmptyValue(option: string, value: string | undefined) {
   if (value?.trim() === "") throw new Error(`--${option} must not be empty`);
+  if (value?.includes("\0")) throw new Error(`--${option} must not contain NUL characters`);
 }
 
-function projectOptions(values: CliValues, cwd: string) {
+function projectOptions(values: CliValues, cwd: string, config: Awaited<ReturnType<typeof loadConfiguration>>) {
   return {
-    cwd, sourceRoots: values["source-root"] ?? ["src"], exclude: values.exclude ?? [], lcov: values.lcov,
-    coverageCommand: values["coverage-command"], useExistingCoverage: values["use-existing-coverage"] ?? false,
+    cwd, sourceRoots: values["source-root"] ?? config.sourceRoots ?? ["src"],
+    exclude: values.exclude ?? config.exclude ?? [], lcov: values.lcov ?? config.lcov ?? "coverage/lcov.info",
+    coverageCommand: values["coverage-command"] ?? config.coverageCommand,
+    setupCommand: values["setup-command"] ?? config.setupCommand,
+    outputDir: resolve(cwd, values["output-dir"] ?? config.outputDir ?? ".metrics"),
+    useExistingCoverage: values["use-existing-coverage"] ?? false,
   };
 }
 
@@ -183,7 +224,6 @@ function matchesPath(file: string, filters: string[]) {
   return filters.some(filter => file.includes(filter));
 }
 
-async function writeReport(cwd: string, filename: string, report: unknown) {
-  await mkdir(resolve(cwd, ".metrics"), { recursive: true });
-  await writeFile(resolve(cwd, ".metrics", filename), JSON.stringify(report, null, 2) + "\n");
+async function writeReport(outputDir: string, filename: string, report: unknown) {
+  await writeJson(resolve(outputDir, filename), report);
 }

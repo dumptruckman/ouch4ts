@@ -1,5 +1,18 @@
-import { realpath, stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
+
+/** Publish complete JSON with an atomic rename in the destination directory. */
+export async function writeJson(path: string, value: unknown) {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, JSON.stringify(value, null, 2) + "\n");
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
 
 export async function reportStamp(path: string) {
   try {
@@ -24,6 +37,16 @@ export async function canonicalPath(path: string): Promise<string> {
   return realpath(path).catch(error =>
     canonicalMissingPath(path, error)
   );
+}
+
+/** Resolve a comparison input and reject symlinks or paths outside its checkout. */
+export async function canonicalRepositoryPath(path: string, root: string) {
+  const absolute = await canonicalPath(path);
+  const fromRoot = relative(root, absolute);
+  if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
+    throw new Error(`Comparison paths must stay inside the Git repository: ${path}`);
+  }
+  return absolute;
 }
 
 async function canonicalMissingPath(path: string, error: unknown): Promise<string> {

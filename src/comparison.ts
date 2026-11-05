@@ -1,20 +1,20 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { readCache, writeCache } from "./cache.js";
-import { canonicalPath } from "./files.js";
+import { canonicalRepositoryPath } from "./files.js";
 import { git } from "./git.js";
-import { analyzeProject } from "./project.js";
+import { analyzeProject, warnUnknownCoverage } from "./project.js";
 import { runCommand } from "./process.js";
 import type { ProjectOptions } from "./project.js";
 import { defaultSetupCommand } from "./package-manager.js";
 
 type Metric = Awaited<ReturnType<typeof analyzeProject>>["entries"][number];
 type FileMetric = Awaited<ReturnType<typeof analyzeProject>>["files"][number];
-type ComparisonOptions = ProjectOptions & { setupCommand: string | undefined; refresh: boolean };
+type ComparisonOptions = ProjectOptions & { setupCommand: string | undefined; refresh: boolean; outputDir: string };
 type SnapshotOptions = ComparisonOptions & { root: string; settingsKey: string };
 
 export async function compareProject(reference: string, options: ComparisonOptions) {
@@ -28,6 +28,8 @@ export async function compareProject(reference: string, options: ComparisonOptio
   const snapshotOptions = { ...normalized, root, settingsKey };
   const before = await snapshot(base, snapshotOptions);
   const after = base === head ? before : await snapshot(head, snapshotOptions);
+  warnUnknownCoverage(before.entries, " at the merge base");
+  if (base !== head) warnUnknownCoverage(after.entries, " at HEAD");
   const renames = renamedFiles(base, head, root, options.cwd);
   return {
     base, head, entries: compareEntries(before.entries, after.entries, renames),
@@ -37,21 +39,14 @@ export async function compareProject(reference: string, options: ComparisonOptio
 
 async function comparisonPaths(options: ComparisonOptions, root: string) {
   async function projectPath(path: string) {
-    const absolute = await canonicalPath(resolve(options.cwd, path));
-    const fromRoot = relative(root, absolute);
-    if (isOutsideRepository(fromRoot)) {
-      throw new Error(`Comparison paths must stay inside the Git repository: ${path}`);
-    }
+    const absolute = await canonicalRepositoryPath(resolve(options.cwd, path), root);
     return relative(options.cwd, absolute) || ".";
   }
+  await projectPath(".");
   return {
     sourceRoots: [...new Set(await Promise.all(options.sourceRoots.map(projectPath)))].sort(),
     lcov: await projectPath(options.lcov),
   };
-}
-
-function isOutsideRepository(path: string) {
-  return path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
 }
 
 async function settingsFingerprint(options: ComparisonOptions, root: string) {
@@ -73,7 +68,7 @@ async function settingsFingerprint(options: ComparisonOptions, root: string) {
 }
 
 async function snapshot(commit: string, options: SnapshotOptions) {
-  const cachePath = join(options.cwd, ".metrics/cache", `${commit}-${options.settingsKey}.json`);
+  const cachePath = join(options.outputDir, "cache", `${commit}-${options.settingsKey}.json`);
   const cached = await reusableSnapshot(cachePath, commit, options);
   if (cached) return cached;
   const directory = await mkdtemp(join(tmpdir(), "ouch4ts-compare-"));
@@ -82,10 +77,12 @@ async function snapshot(commit: string, options: SnapshotOptions) {
   try {
     git(["-c", "core.hooksPath=/dev/null", "worktree", "add", "--detach", checkout, commit], options.root);
     added = true;
+    const repositoryRoot = await realpath(checkout);
     const cwd = await realpath(resolve(checkout, relative(options.root, options.cwd)));
+    await comparisonPaths({ ...options, cwd }, repositoryRoot);
     console.error(`Analyzing ${commit}`);
     runCommand(options.setupCommand ?? await defaultSetupCommand(cwd), cwd, "Setup");
-    const report = await analyzeProject({ ...options, cwd, useExistingCoverage: false });
+    const report = await analyzeProject({ ...options, cwd, repositoryRoot, useExistingCoverage: false });
     await writeCache(cachePath, commit, options.settingsKey, report);
     return report;
   } finally {

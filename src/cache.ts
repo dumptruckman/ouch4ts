@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
 import type { analyzeProject } from "./project.js";
-import { isMissingFile } from "./files.js";
+import { isMissingFile, writeJson } from "./files.js";
 import { isRecord, validatedReport } from "./report.js";
 
 type Report = Awaited<ReturnType<typeof analyzeProject>>;
@@ -32,12 +30,5 @@ function isMatchingReport(data: unknown, commit: string, settingsKey: string): d
 }
 
 export async function writeCache(path: string, commit: string, settingsKey: string, report: Report) {
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, JSON.stringify({ commit, settingsKey, ...report }, null, 2) + "\n");
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+  await writeJson(path, { commit, settingsKey, ...report });
 }

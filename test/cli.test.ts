@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +27,95 @@ test("help works without source files or a coverage setup", async () => {
   expect(existsSync(join(cwd, ".metrics"))).toBe(false);
 });
 
+test("selects one project from a monorepo root and runs coverage there", async () => {
+  const cwd = project({
+    "packages/app/src/orders.ts": "export const price = () => 10;",
+    "packages/app/cover.cjs": `const fs = require('node:fs'); fs.mkdirSync('coverage'); fs.writeFileSync('coverage/lcov.info', 'SF:src/orders.ts\\nDA:1,1\\nend_of_record\\n');`,
+    "packages/other/src/broken.ts": "function broken( {",
+  });
+  const result = await run(cwd, "--project", "packages/app", "--coverage-command", "node cover.cjs");
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("src/orders.ts");
+  expect(readCurrentReport(join(cwd, "packages/app"))).toMatchObject({ entries: [{ name: "price", coverage: 100 }] });
+  expect(existsSync(join(cwd, ".metrics"))).toBe(false);
+});
+
+test("resolves external config paths against the selected project and replaces configured lists with flags", async () => {
+  const cwd = project({
+    "shared/config.json": JSON.stringify({ sourceRoots: ["lib"], exclude: ["**/broken.*"],
+      lcov: "reports/unit.lcov", coverageCommand: "exit 9", setupCommand: "exit 8", outputDir: "reports/metrics" }),
+    "packages/app/lib/orders.ts": "export const price = () => 10;",
+    "packages/app/lib/broken.ts": "function broken( {",
+    "packages/app/extra/work.ts": "export const work = () => 20;",
+    "packages/app/extra/ignored.ts": "function broken( {",
+    "packages/app/other/worker.ts": "export const worker = () => 30;",
+    "packages/app/reports/unit.lcov": "SF:lib/orders.ts\nDA:1,1\nend_of_record\n",
+    "packages/app/reports/other.lcov": "SF:extra/work.ts\nDA:1,1\nend_of_record\n",
+  });
+  const args = ["--project", "packages/app", "--config", "shared/config.json", "--use-existing-coverage"];
+  const configured = await run(cwd, ...args);
+  expect(configured.status, configured.stderr).toBe(0);
+  expect(configured.stdout).toContain("lib/orders.ts");
+  const overridden = await run(cwd, ...args, "--source-root", "extra", "--source-root", "other",
+    "--exclude", "**/ignored.*", "--lcov", "reports/other.lcov", "--output-dir", "custom");
+  expect(overridden.status, overridden.stderr).toBe(0);
+  expect(overridden.stdout).toContain("extra/work.ts");
+  expect(overridden.stdout).toContain("other/worker.ts");
+  expect(overridden.stdout).not.toContain("lib/orders.ts");
+  expect(existsSync(join(cwd, "packages/app/reports/metrics/ouch.json"))).toBe(true);
+  expect(existsSync(join(cwd, "packages/app/custom/ouch.json"))).toBe(true);
+  expect(existsSync(join(cwd, "packages/app/.metrics"))).toBe(false);
+});
+
+test("loads only project-local config and allows bypassing it", async () => {
+  const cwd = project({
+    "ouch4ts.config.json": "invalid parent config",
+    "packages/app/src/orders.ts": "export const price = () => 10;",
+    "packages/app/coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
+  });
+  const args = ["--project", "packages/app", "--use-existing-coverage"];
+  expect((await run(cwd, ...args)).status).toBe(0);
+  writeFileSync(join(cwd, "packages/app/ouch4ts.config.json"), JSON.stringify({ sourceRoots: ["missing"] }));
+  expect((await run(cwd, ...args)).status).toBe(1);
+  expect((await run(cwd, ...args, "--no-config")).status).toBe(0);
+});
+
+test.each([
+  { name: "malformed JSON", config: "{", message: /Invalid JSON config/ },
+  { name: "null", config: "null", message: /config object/ },
+  { name: "array", config: "[]", message: /config object/ },
+  { name: "unknown key", config: '{"format":"json"}', message: /Unknown config property format/ },
+  { name: "string roots", config: '{"sourceRoots":"src"}', message: /sourceRoots.*list/ },
+  { name: "empty roots", config: '{"sourceRoots":[]}', message: /sourceRoots.*empty/ },
+  { name: "invalid list member", config: '{"exclude":[null]}', message: /exclude.*non-empty string/ },
+  { name: "blank path", config: '{"outputDir":" "}', message: /outputDir.*non-empty string/ },
+  { name: "null command", config: '{"coverageCommand":null}', message: /coverageCommand.*non-empty string/ },
+])("rejects $name config before running commands", async ({ config, message }) => {
+  const cwd = project({ "ouch4ts.config.json": config });
+  const result = await run(cwd, "--coverage-command", "node -e 'process.exit(42)'");
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toMatch(message);
+  expect(result.stderr).not.toContain("Coverage command failed");
+});
+
+test.each([
+  { args: ["--config", "missing.json"], message: /Config not found/ },
+  { args: ["--config", "config-directory"], message: /EISDIR/ },
+  { args: ["--config", "missing.json", "--no-config"], message: /--config cannot combine with --no-config/ },
+  { args: ["--setup-command", "exit 9"], message: /--setup-command requires --compare/ },
+  { args: ["--use-existing-coverage", "--coverage-command", "exit 9"], message: /--coverage-command cannot combine with --use-existing-coverage/ },
+  ...["project", "source-root", "lcov", "config", "output-dir", "since", "compare"]
+    .map(option => ({ args: [`--${option}`, " "], message: /must not be empty/ })),
+])("rejects invalid invocation $args before running commands", async ({ args, message }) => {
+  const cwd = project({ "config-directory/placeholder": "" });
+  const result = await run(cwd, ...args);
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toMatch(message);
+  expect(existsSync(join(cwd, ".metrics"))).toBe(false);
+});
+
 test("prints filtered file metrics and cognitive scores while saving the complete report", async () => {
   const cwd = project({
     "src/nested.ts": `function outer() {
@@ -48,6 +137,70 @@ test("prints filtered file metrics and cognitive scores while saving the complet
     ],
     entries: [{ name: "outer", cognitive: 3, crap: 2, ouch: 5 }, { name: "outer.inner", cognitive: 1 }],
   });
+});
+
+test("emits filtered JSON with table ordering, complete saved reports, and warnings on stderr", async () => {
+  const cwd = project({
+    "src/orders.ts": "export function price(vip) { if (vip) return 1; return 2; }",
+    "src/other.ts": "export const unknown = () => 1;",
+    "coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
+  });
+  const result = await run(cwd, "--use-existing-coverage", "--format", "json", "orders");
+  expect(result.status, result.stderr).toBe(0);
+  const selected: ReturnType<typeof analyzeReport> = JSON.parse(result.stdout);
+  expect(selected).toEqual({ entries: [expect.objectContaining({ name: "price", ouch: 3 })],
+    files: [{ file: "src/orders.ts", complexity: 2, cognitive: 1, functions: 1 }] });
+  expect(readCurrentReport(cwd).entries).toHaveLength(2);
+  expect(result.stderr).toMatch(/1 functions.*N\/A/);
+  const all = await run(cwd, "--use-existing-coverage", "--format", "json");
+  expect(JSON.parse(all.stdout)).toEqual(readCurrentReport(cwd));
+  expect(JSON.parse(all.stdout)).toMatchObject({ entries: [{ name: "price" }, { name: "unknown", coverage: null, ouch: null }] });
+  const table = await run(cwd, "--use-existing-coverage", "orders");
+  expect(table.stdout).toContain("price");
+  expect(table.stdout).not.toContain("unknown");
+});
+
+const packageMetadata: { version: string } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+
+test.each([
+  { args: ["--version"], status: 0, output: packageMetadata.version + "\n", error: /^$/ },
+  { args: ["--format", "yaml"], status: 1, output: "", error: /--format must be table or json/ },
+])("executable handles $args without sources or coverage", ({ args, status, output, error }) => {
+  const result = runBinary(project({ "ouch4ts.config.json": "invalid config" }), ...args);
+  expect(result.status, result.stderr).toBe(status);
+  expect(result.stdout).toBe(output);
+  expect(result.stderr).toMatch(error);
+});
+
+test("discovers sources generated by fresh coverage and keeps child output off JSON stdout", () => {
+  const cwd = project({
+    "ouch4ts.config.json": JSON.stringify({ coverageCommand: "node cover.cjs" }),
+    "cover.cjs": `const fs = require('node:fs');
+fs.mkdirSync('src'); fs.writeFileSync('src/generated.ts', 'export const generated = () => 1;');
+fs.mkdirSync('coverage'); fs.writeFileSync('coverage/lcov.info', 'SF:src/generated.ts\\nDA:1,1\\nend_of_record\\n');
+console.log('coverage stdout'); console.error('coverage stderr');`,
+  });
+  const result = runBinary(cwd, "--format", "json");
+  expect(result.status, result.stderr).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ entries: [{ name: "generated", coverage: 100 }] });
+  expect(result.stderr).toContain("coverage stdout");
+  expect(result.stderr).toContain("coverage stderr");
+});
+
+test("atomically replaces reports without modifying the previously published file", async () => {
+  const previous = JSON.stringify({ entries: [], files: [] });
+  const cwd = project({
+    "src/orders.ts": "export const price = () => 10;",
+    "coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
+    "previous.json": previous,
+    ".metrics/placeholder": "",
+  });
+  linkSync(join(cwd, "previous.json"), join(cwd, ".metrics/ouch.json"));
+  const result = await run(cwd, "--use-existing-coverage", "--format", "json");
+  expect(result.status, result.stderr).toBe(0);
+  expect(readCurrentReport(cwd)).toMatchObject({ entries: [{ name: "price" }] });
+  expect(readFileSync(join(cwd, "previous.json"), "utf8")).toBe(previous);
+  expect(readdirSync(join(cwd, ".metrics")).sort()).toEqual(["ouch.json", "placeholder"]);
 });
 
 test.each([
@@ -172,11 +325,27 @@ test.each([
     "coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
     "package.json": JSON.stringify({ scripts: { "test:coverage": "node cover.cjs" } }),
     "cover.cjs": command,
+    ".metrics/ouch.json": "previous report",
   });
-  const result = await run(cwd);
+  const result = await run(cwd, "--format", "json");
   expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
   expect(result.stderr).toMatch(message);
-  expect(existsSync(join(cwd, ".metrics/ouch.json"))).toBe(false);
+  expect(readFileSync(join(cwd, ".metrics/ouch.json"), "utf8")).toBe("previous report");
+});
+
+test("reports failed output replacement without emitting JSON or leaving a partial file", async () => {
+  const cwd = project({
+    "src/orders.ts": "export const price = () => 10;",
+    "coverage/lcov.info": "SF:src/orders.ts\nDA:1,1\nend_of_record\n",
+    "reports/ouch.json/placeholder": "keep",
+  });
+  const result = await run(cwd, "--use-existing-coverage", "--format", "json", "--output-dir", "reports");
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("ouch.json");
+  expect(readFileSync(join(cwd, "reports/ouch.json/placeholder"), "utf8")).toBe("keep");
+  expect(readdirSync(join(cwd, "reports"))).toEqual(["ouch.json"]);
 });
 
 test("runs the project's coverage script and replaces stale scores with fresh coverage", async () => {
@@ -377,6 +546,103 @@ fs.appendFileSync(${log}, JSON.stringify({ phase: 'coverage', revision: fs.readF
 function runComparison(cwd: string, ...args: string[]) {
   return run(cwd, "--compare", "base", "--setup-command", "node setup.cjs", "--coverage-command", "node cover.cjs", ...args);
 }
+
+test("uses launching config for both comparison checkouts with custom report storage and JSON filtering", async () => {
+  const cwd = comparisonProject({ "ouch4ts.config.json": JSON.stringify({ sourceRoots: ["missing"] }),
+    "src/unknown.ts": "export const unknown = () => 1;" }, "packages/app");
+  const repository = dirname(dirname(cwd));
+  const configPath = join(repository, "shared.json");
+  writeFileSync(configPath, JSON.stringify({ sourceRoots: ["src"], exclude: [], lcov: "coverage/lcov.info",
+    setupCommand: "node setup.cjs", coverageCommand: "node cover.cjs", outputDir: "reports/metrics" }));
+  const args = ["--project", "packages/app", "--config", "shared.json", "--compare", "base", "--format", "json"];
+  const first = await run(repository, ...args, "missing-file");
+  expect(first.status, first.stderr).toBe(0);
+  expect(JSON.parse(first.stdout)).toEqual({ base: git(cwd, "rev-parse", "base").trim(),
+    head: git(cwd, "rev-parse", "HEAD").trim(), entries: [], files: [] });
+  expect(first.stderr).toMatch(/N\/A coverage/);
+  const reportPath = join(cwd, "reports/metrics/ouch-comparison.json");
+  expect(JSON.parse(readFileSync(reportPath, "utf8"))).toMatchObject({ entries: expect.arrayContaining([
+    expect.objectContaining({ name: "price" }), expect.objectContaining({ name: "removed" }),
+    expect.objectContaining({ name: "added" }),
+  ]) });
+  expect(existsSync(join(cwd, ".metrics"))).toBe(false);
+  expect(readdirSync(join(cwd, "reports/metrics/cache"))).toHaveLength(2);
+  const calls = readFileSync(join(cwd, "calls.log"), "utf8");
+  const second = await run(repository, ...args);
+  expect(second.status, second.stderr).toBe(0);
+  expect(second.stderr.match(/Using cached report/g)).toHaveLength(2);
+  expect(second.stderr).toMatch(/N\/A coverage/);
+  expect(readFileSync(join(cwd, "calls.log"), "utf8")).toBe(calls);
+  expect(JSON.parse(second.stdout)).toEqual(JSON.parse(readFileSync(reportPath, "utf8")));
+  writeFileSync(configPath, readFileSync(configPath, "utf8").replace('"exclude":[]', '"exclude":["**/unknown.*"]'));
+  const changed = await run(repository, ...args);
+  expect(changed.status, changed.stderr).toBe(0);
+  expect(changed.stderr.match(/Analyzing /g)).toHaveLength(2);
+  expect(readdirSync(join(cwd, "reports/metrics/cache"))).toHaveLength(4);
+  const refreshed = await run(repository, ...args, "--refresh");
+  expect(refreshed.status, refreshed.stderr).toBe(0);
+  expect(refreshed.stderr.match(/Analyzing /g)).toHaveLength(2);
+  expect(git(cwd, "worktree", "list", "--porcelain").match(/^worktree /gm)).toHaveLength(1);
+});
+
+test.each([
+  { path: "lib", args: ["--source-root", "lib"] },
+  { path: "coverage", args: ["--lcov", "coverage/lcov.info"] },
+])("rejects an escaping $path symlink in a comparison revision before setup", async ({ path, args }) => {
+  const cwd = comparisonProject();
+  const outside = project({ "orders.ts": "export const outside = () => 1;", "lcov.info": "" });
+  symlinkSync(outside, join(cwd, path), "dir");
+  commit(cwd, "Link outside checkout");
+  git(cwd, "branch", "-f", "base", "HEAD");
+  rmSync(join(cwd, path));
+  mkdirSync(join(cwd, path));
+  writeFileSync(join(cwd, path, "orders.ts"), "export const inside = () => 1;");
+  commit(cwd, "Keep paths in checkout");
+  const result = await runComparison(cwd, ...args);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("Comparison paths must stay inside the Git repository");
+  expect(existsSync(join(cwd, "calls.log"))).toBe(false);
+  expect(git(cwd, "worktree", "list", "--porcelain").match(/^worktree /gm)).toHaveLength(1);
+});
+
+test.each(["setup", "coverage"].flatMap(phase => [
+  { phase, path: "lib", args: ["--source-root", "lib"] },
+  { phase, path: "coverage", args: [] },
+]))("rejects an escaping $path symlink created by $phase before reading comparison inputs", async ({ phase, path, args }) => {
+  const cwd = comparisonProject();
+  const outside = project({ "orders.ts": "export const outside = () => 1;",
+    "lcov.info": "SF:src/orders.ts\nDA:2,1\nend_of_record\n" });
+  writeFileSync(join(cwd, "escape.cjs"), `const fs = require('node:fs');
+fs.rmSync(${JSON.stringify(path)}, { recursive: true, force: true });
+fs.symlinkSync(${JSON.stringify(outside)}, ${JSON.stringify(path)}, 'dir');`);
+  commit(cwd, "Add preparation command");
+  const result = await runComparison(cwd, "--compare", "HEAD", ...args,
+    `--${phase}-command`, `node ${phase === "setup" ? "setup" : "cover"}.cjs && node escape.cjs`, "--format", "json");
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("Comparison paths must stay inside the Git repository");
+  expect(existsSync(join(cwd, ".metrics/cache"))).toBe(false);
+  expect(git(cwd, "worktree", "list", "--porcelain").match(/^worktree /gm)).toHaveLength(1);
+});
+
+test("rejects a missing comparison reference before setup or coverage", async () => {
+  const cwd = comparisonProject();
+  const result = await runComparison(cwd, "--compare", "missing-reference", "--format", "json");
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("git rev-parse failed");
+  expect(result.stderr).toContain("Fetch missing references or history");
+  expect(existsSync(join(cwd, "calls.log"))).toBe(false);
+  expect(existsSync(join(cwd, ".metrics"))).toBe(false);
+});
+
+test("explains how to make Git available when it is missing", () => {
+  vi.stubEnv("PATH", project({}));
+  const result = runBinary(project({}), "--since", "HEAD", "--format", "json");
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("Install Git and ensure it is on PATH");
+});
 
 test("compares file metrics and cognitive changes even without function coverage", async () => {
   const cwd = comparisonProject({
@@ -782,7 +1048,8 @@ test("comparison analyzes one commit once when the merge base is HEAD", async ()
   expect(readComparisonReport(cwd).entries).toEqual([]);
 });
 
-test.each(["ts", "js"])("since reports changed .%s functions with full scores and preserves complete metrics", async extension => {
+test.each(["ts", "js"].flatMap(extension => ["table", "json"].map(format => ({ extension, format }))))(
+  "since reports changed .$extension functions in $format with full scores and preserves complete metrics", async ({ extension, format }) => {
   const path = `src/orders.${extension}`;
   const before = "export function changed(vip) {\n  if (vip) return 1;\n  return 2;\n}\n\nexport const untouched = () => 4;\n";
   const cwd = project({
@@ -795,10 +1062,15 @@ test.each(["ts", "js"])("since reports changed .%s functions with full scores an
   writeFileSync(join(cwd, path), before.replace("return 2", "return 3"));
   commit(cwd, "Change price");
 
-  const result = await run(cwd, "--since", "base", "--use-existing-coverage");
+  const result = await run(cwd, "--since", "base", "--use-existing-coverage", "--format", format);
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toContain(`${path}:1`);
-  expect(result.stdout).toMatch(/changed\s+\S+:1\s+2\s+1\s+50\.0%\s+2\.5\s+3\.5/);
+  if (format === "json") {
+    expect(JSON.parse(result.stdout)).toMatchObject({ entries: [{ name: "changed", crap: 2.5, ouch: 3.5 }],
+      files: [{ file: path }] });
+  } else {
+    expect(result.stdout).toContain(`${path}:1`);
+    expect(result.stdout).toMatch(/changed\s+\S+:1\s+2\s+1\s+50\.0%\s+2\.5\s+3\.5/);
+  }
   expect(result.stdout).not.toContain("untouched");
   expect(readCurrentReport(cwd)).toMatchObject({ entries: [
     { name: "changed", crap: 2.5, ouch: 3.5 }, { name: "untouched", crap: 1, ouch: 1 },
@@ -941,6 +1213,7 @@ test("since fails before running coverage or writing metrics when its Git refere
   const result = await run(cwd, "--since", "missing-reference", "--coverage-command", "node -e \"process.exit(42)\"");
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/git rev-parse failed/);
+  expect(result.stderr).toContain("Fetch missing references or history");
   expect(result.stderr).not.toContain("Coverage command failed");
   expect(existsSync(join(cwd, ".metrics"))).toBe(false);
 });
