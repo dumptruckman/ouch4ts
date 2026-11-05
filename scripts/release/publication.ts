@@ -43,7 +43,10 @@ export async function verifyRegistryArtifact(input: { registry: string; reposito
   const workflow = definition.externalParameters.workflow;
   const repositoryUrl = `https://github.com/${input.repository}`;
   const expectedDigest = Buffer.from(input.integrity.replace(/^sha512-/, ""), "base64").toString("hex");
-  if (workflow.repository !== repositoryUrl || workflow.path !== ".github/workflows/release.yml" || !definition.resolvedDependencies.some((entry) => entry.uri.startsWith(`git+${repositoryUrl}@`) && entry.digest.gitCommit === input.source) || payload.subject.length !== 1 || payload.subject[0]?.digest.sha512 !== expectedDigest) throw new Error("npm provenance source, workflow, or artifact differs from the release plan");
+  const hasExpectedWorkflow = workflow.repository === repositoryUrl && workflow.path === ".github/workflows/release.yml";
+  const hasExpectedSource = definition.resolvedDependencies.some((entry) => entry.uri.startsWith(`git+${repositoryUrl}@`) && entry.digest.gitCommit === input.source);
+  const hasExpectedArtifact = payload.subject.length === 1 && payload.subject[0]?.digest.sha512 === expectedDigest;
+  if (!hasExpectedWorkflow || !hasExpectedSource || !hasExpectedArtifact) throw new Error("npm provenance source, workflow, or artifact differs from the release plan");
   // npm validates attestations on publication. Bind the registry's statement to our retained source and bytes.
   if (!manifest.dist.tarball) throw new Error("npm tarball URL is missing");
   const tarball = await fetch(manifest.dist.tarball);

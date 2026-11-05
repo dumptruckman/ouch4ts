@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { z } from "zod";
 import { GitHub } from "./github.ts";
-import { isReleaseProposal, planSchema, releaseLabel, releaseNotes, type ReleasePlan } from "./plan.ts";
+import { assertPackageVersions, isReleaseProposal, planSchema, releaseLabel, releaseNotes, type ReleasePlan } from "./plan.ts";
 import { loadRun, readJson, type runContext } from "./state.ts";
 
 export function prepareProposal(plan: ReleasePlan): void {
@@ -28,9 +28,7 @@ export function versionProposal(): void {
   const cli = path.join(path.dirname(require.resolve("@changesets/cli/package.json")), "bin.js");
   execFileSync(process.execPath, [cli, "version"], { stdio: "inherit" });
   execFileSync("npm", ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], { stdio: "inherit" });
-  const pkg = z.object({ version: z.string() }).parse(readJson("package.json"));
-  const lock = z.object({ version: z.string(), packages: z.object({ "": z.object({ version: z.string() }) }) }).parse(readJson("package-lock.json"));
-  if (pkg.version !== plan.version || lock.version !== plan.version || lock.packages[""].version !== plan.version) throw new Error("Changesets and the frozen release plan disagree on the version");
+  assertPackageVersions({ packageJson: readJson("package.json"), lockfile: readJson("package-lock.json"), expected: plan.version });
   if (readdirSync(".changeset").some((file) => file.startsWith("pr-") && file.endsWith(".md"))) throw new Error("Changesets did not consume generated inputs");
 }
 
@@ -57,9 +55,8 @@ export async function checkLabels(): Promise<void> {
   if (proposal) {
     const plan = planSchema.parse(await contentAt(github, ".release/plan.json", pr.head.sha));
     if (plan.source !== pr.base.sha || plan.branch !== pr.base.ref || plan.bump !== bump || bump === "none") throw new Error("Release proposal must be current with its target and calculated label");
-    const pkg = z.object({ version: z.string() }).parse(await contentAt(github, "package.json", pr.head.sha));
-    const lock = z.object({ version: z.string(), packages: z.object({ "": z.object({ version: z.string() }) }) }).parse(await contentAt(github, "package-lock.json", pr.head.sha));
-    if (pkg.version !== plan.version || lock.version !== plan.version || lock.packages[""].version !== plan.version) throw new Error("Release proposal versions are inconsistent");
+    const [packageJson, lockfile] = await Promise.all([contentAt(github, "package.json", pr.head.sha), contentAt(github, "package-lock.json", pr.head.sha)]);
+    assertPackageVersions({ packageJson, lockfile, expected: plan.version });
   }
 }
 
@@ -68,7 +65,7 @@ export async function finishProposal(context: ReturnType<typeof runContext>): Pr
   if (run.active.kind !== "ordinary" || run.active.plan.bump === "none") throw new Error("No release proposal is expected");
   const number = z.coerce.number().int().positive().parse(process.env.RELEASE_PR);
   const pr = pullSchema.parse(await context.github.request("GET", `pulls/${number}`));
-  if (pr.base.ref !== run.active.branch || pr.base.sha !== run.active.source || pr.head.ref !== `changeset-release/${run.active.branch}` || pr.user.login !== "github-actions[bot]") throw new Error("Proposal target moved; rerun this source after recovering pending work");
+  if (pr.base.ref !== run.active.branch || pr.head.ref !== `changeset-release/${run.active.branch}` || pr.user.login !== "github-actions[bot]" || pr.head.repo?.full_name !== context.env.GITHUB_REPOSITORY) throw new Error("Generated release proposal identity differs from its target");
   const plan = planSchema.parse(await contentAt(context.github, ".release/plan.json", pr.head.sha));
   if (JSON.stringify(plan) !== JSON.stringify(run.active.plan)) throw new Error("Generated proposal differs from the frozen plan");
   const otherLabels = pr.labels.map((label) => label.name).filter((label) => !label.startsWith("release:") && label !== "no release");

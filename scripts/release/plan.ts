@@ -40,6 +40,12 @@ export const planSchema = z.object({
 export type ReleasePlan = z.infer<typeof planSchema>;
 export type PullRequest = z.infer<typeof prSchema>;
 
+export function assertPackageVersions(input: { packageJson: unknown; lockfile: unknown; expected: string }): void {
+  const pkg = z.object({ version: z.string() }).parse(input.packageJson);
+  const lock = z.object({ version: z.string(), packages: z.object({ "": z.object({ version: z.string() }) }) }).parse(input.lockfile);
+  if (pkg.version !== input.expected || lock.version !== input.expected || lock.packages[""].version !== input.expected) throw new Error("Package and lockfile versions differ from the frozen release plan");
+}
+
 export function planRelease(input: Omit<ReleasePlan, "bump" | "version">): ReleasePlan {
   const branch = branchSchema.parse(input.branch);
   const baseline = baselineSchema.parse(input.baseline);

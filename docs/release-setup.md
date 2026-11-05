@@ -35,6 +35,6 @@ In the npm package's **Settings > Trusted publishing**, add a GitHub Actions pub
 
 Create this connection within two days of its first automated publication. If it expires unused, delete it and create a new connection. npm's [trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/) describes these settings and the first-use limit.
 
-The publisher uses GitHub-hosted `ubuntu-24.04`, Node `24.22.1`, and npm `12.2.1`. Its job requests `contents: write`, `pull-requests: read`, and `id-token: write`. Proposal updates request `contents: write` and `pull-requests: write`. PR CI has read-only permissions and no publishing environment.
+The publisher uses GitHub-hosted `ubuntu-24.04`, Node `24.22.1`, and npm `12.2.1`. Its job requests `contents: write`, `pull-requests: read`, `actions: read`, and `id-token: write`. Actions read access verifies the original push run during recovery. Proposal updates request `contents: write` and `pull-requests: write`. PR CI has read-only permissions and no publishing environment.
 
-After verifying account access, branch protections, environment restrictions, baseline identity, and the trusted publisher, set `RELEASES_ENABLED` to `true`. Merge a reviewed, labelled PR to exercise the first automated preview. No setup command in this guide enables publication automatically.
+Pause merges between selecting the bootstrap source and enabling the recorder so no post-baseline merge goes unrecorded. After verifying account access, branch protections, environment restrictions, baseline identity, and the trusted publisher, set `RELEASES_ENABLED` to `true`. Merge a reviewed, labelled PR to exercise the first automated preview. No setup command in this guide enables publication automatically.

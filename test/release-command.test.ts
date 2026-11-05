@@ -9,6 +9,7 @@ import { afterEach, expect, test } from "vitest";
 import { verifyRegistryArtifact } from "../scripts/release/publication.ts";
 import type { Release } from "../scripts/release/github.ts";
 import { recordSchema } from "../scripts/release/state.ts";
+import { planSchema } from "../scripts/release/plan.ts";
 
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
@@ -47,6 +48,9 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
   const registry = { value: {} as unknown, status: 404, version: "0.1.1", tarball: Buffer.alloc(0), tags: { latest: "0.1.0" } as Record<string, string>, publishCount: 0, ambiguousPublish: false, failFinalization: false };
   const assets = new Map<number, Buffer>();
   const refs = new Map<string, string>();
+  const pulls = new Map<number, unknown>();
+  const contents = new Map<string, unknown>();
+  const runs = new Map<number, unknown>();
   let baseUrl = "";
   const bodyBytes = async (req: import("node:http").IncomingMessage) => {
     const chunks: Buffer[] = [];
@@ -76,6 +80,16 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
       const data = JSON.parse((await bodyBytes(req)).toString()); registry.tags[data.channel] = data.version; res.end("{}"); return;
     }
     if (req.url?.startsWith("/repos/test/repo/releases?")) { res.end(JSON.stringify(releases)); return; }
+    const originalRun = req.url?.match(/^\/repos\/test\/repo\/actions\/runs\/(\d+)$/);
+    if (originalRun) { res.end(JSON.stringify(runs.get(Number(originalRun[1])))); return; }
+    if (req.url === `/repos/test/repo/commits/${source}/pulls?per_page=100`) { res.end(JSON.stringify([{ number: 1, merged_at: "2026-11-05T00:00:00Z" }])); return; }
+    const pull = req.url?.match(/^\/repos\/test\/repo\/pulls\/(\d+)$/);
+    if (pull && req.method === "GET") { res.end(JSON.stringify(pulls.get(Number(pull[1])))); return; }
+    if (req.url?.startsWith("/repos/test/repo/contents/")) {
+      const file = req.url.slice("/repos/test/repo/contents/".length).split("?")[0] ?? "";
+      res.end(JSON.stringify({ encoding: "base64", content: Buffer.from(JSON.stringify(contents.get(file))).toString("base64") })); return;
+    }
+    if ((pull || req.url?.startsWith("/repos/test/repo/issues/")) && req.method === "PATCH") { res.end("{}"); return; }
     if (req.url === "/repos/test/repo/releases" && req.method === "POST") {
       const data = JSON.parse((await bodyBytes(req)).toString());
       const release = { ...data, id: releases.length + 1, assets: [] }; releases.push(release); res.end(JSON.stringify(release)); return;
@@ -138,7 +152,7 @@ if(args[0]==='publish') {
     return { code, stdout, stderr };
   };
   const publisherEnv = { GITHUB_ACTIONS: "true", GITHUB_WORKFLOW_REF: "test/repo/.github/workflows/release.yml@refs/heads/main", NPM_CONFIG_REGISTRY: baseUrl, PATH: `${bin}:${process.env.PATH}` };
-  return { root, git, baseline, source, releases, requests, run, pr, eventFile, registry, registryUrl: baseUrl, publisherEnv };
+  return { root, git, baseline, source, releases, requests, run, pr, eventFile, registry, registryUrl: baseUrl, publisherEnv, pulls, contents, runs };
 }
 
 test("the release command plans an exact source from a frozen merge record", async () => {
@@ -206,17 +220,20 @@ test("stable recovery finishes GitHub after npm success without changing version
   expect(JSON.parse(f.releases.find((release) => release.tag_name === `record-${stableSource}`)?.body ?? "{}")).toMatchObject({ state: "github complete", runId: "124", kind: "stable" });
 }, 20000);
 
-test("registry recovery distinguishes absent, conflicting, and unverified artifacts", async () => {
+test("a missing registry artifact is eligible for its original publication", async () => {
   const f = await fixture();
   const input = { registry: f.registryUrl, version: "0.1.1", source: f.source, integrity: "sha512-correct", repository: "test/repo" };
   expect(await verifyRegistryArtifact(input)).toBe(false);
-  f.registry.status = 500;
-  await expect(verifyRegistryArtifact(input)).rejects.toThrow(/500/);
-  f.registry.status = 200;
-  f.registry.value = { version: "0.1.1", dist: { integrity: "sha512-other", attestations: { url: `${f.registryUrl}/attestations` } } };
-  await expect(verifyRegistryArtifact(input)).rejects.toThrow(/different contents/);
-  f.registry.value = { version: "0.1.1", dist: { integrity: "sha512-correct" } };
-  await expect(verifyRegistryArtifact(input)).rejects.toThrow(/provenance/);
+});
+
+test.each([
+  { status: 500, manifest: {}, error: /500/ },
+  { status: 200, manifest: { version: "0.1.1", dist: { integrity: "sha512-other" } }, error: /different contents/ },
+  { status: 200, manifest: { version: "0.1.1", dist: { integrity: "sha512-correct" } }, error: /provenance/ },
+])("registry status $status and $manifest prevent publication", async ({ status, manifest, error }) => {
+  const f = await fixture();
+  f.registry.status = status; f.registry.value = manifest;
+  await expect(verifyRegistryArtifact({ registry: f.registryUrl, version: "0.1.1", source: f.source, integrity: "sha512-correct", repository: "test/repo" })).rejects.toThrow(error);
 });
 
 test("an out-of-order run refuses to skip an unfinished predecessor", async () => {
@@ -232,7 +249,10 @@ test("an out-of-order run refuses to skip an unfinished predecessor", async () =
   expect(f.requests.every((request) => request.startsWith("GET "))).toBe(true);
 });
 
-test.each(["no release", "release:minor"])("a following %s merge refreshes the complete pending plan", async (label) => {
+test.each([
+  { label: "no release", expectedVersion: "0.1.1" },
+  { label: "release:minor", expectedVersion: "0.2.0" },
+])("a following $label merge refreshes the complete pending plan", async ({ label, expectedVersion }) => {
   const f = await fixture();
   const first = f.releases.find((release) => release.id === 2);
   if (!first) throw new Error("Missing fixture record");
@@ -246,9 +266,44 @@ test.each(["no release", "release:minor"])("a following %s merge refreshes the c
   const result = await f.run("prepare", { GITHUB_SHA: next });
   expect(result.stderr).toBe("");
   expect(result.code).toBe(0);
-  const expectedVersion = label === "release:minor" ? "0.2.0" : "0.1.1";
   expect(JSON.parse(await readFile(path.join(f.root, ".release/plan.json"), "utf8"))).toMatchObject({ source: next, version: expectedVersion, changes: [{ number: 1 }, { number: 2 }] });
   expect(await readFile(path.join(f.root, ".changeset/pr-1.md"), "utf8")).toContain('"ouch4ts": patch');
+});
+
+test("a newer merge permits predecessor completion while keeping its proposal unmergeable", async () => {
+  const f = await fixture();
+  const plan = planSchema.parse(JSON.parse((await f.run("plan")).stdout));
+  const current = f.releases.find((release) => release.tag_name === `record-${f.source}`);
+  if (!current) throw new Error("Missing merge record");
+  current.body = JSON.stringify({ schema: 1, source: f.source, branch: "main", state: "preview verified", before: f.baseline, runId: "123", kind: "ordinary", plan, pr: f.pr });
+  f.pulls.set(42, { number: 42, title: "Release ouch4ts", body: "", html_url: "https://github.com/test/repo/pull/42", labels: [{ name: "release:patch" }], user: { login: "github-actions[bot]" }, base: { ref: "main", sha: "d".repeat(40) }, head: { ref: "changeset-release/main", sha: "e".repeat(40), repo: { full_name: "test/repo" } } });
+  f.contents.set(".release/plan.json", plan);
+  const result = await f.run("proposal", { RELEASE_PR: "42" });
+  expect(result.code, result.stderr).toBe(0);
+  expect(JSON.parse(current.body ?? "{}")).toMatchObject({ state: "proposal current", source: f.source });
+  await writeFile(f.eventFile, JSON.stringify({ pull_request: { number: 42 } }));
+  expect((await f.run("labels")).stderr).toContain("must be current");
+});
+
+test("an expired push canceled before planning can recover at its exact source with verified inputs", async () => {
+  const f = await fixture();
+  f.runs.set(77, { id: 77, event: "push", head_sha: f.source, head_branch: "main", path: ".github/workflows/release.yml" });
+  const env = { ...f.publisherEnv, GITHUB_EVENT_NAME: "workflow_dispatch", RELEASE_RECOVER_RUN: "77", RELEASE_RECOVER_BEFORE: f.baseline };
+  const result = await f.run("publish", env);
+  expect(result.code, result.stderr).toBe(0);
+  expect(f.registry.version).toBe("0.1.1-preview.77");
+  expect(f.registry.publishCount).toBe(1);
+  const current = f.releases.find((release) => release.tag_name === `record-${f.source}`);
+  expect(JSON.parse(current?.body ?? "{}")).toMatchObject({ before: f.baseline, runId: "77", state: "preview verified" });
+}, 20000);
+
+test("unplanned recovery rejects an original run from a different source before mutation", async () => {
+  const f = await fixture();
+  f.runs.set(77, { id: 77, event: "push", head_sha: f.baseline, head_branch: "main", path: ".github/workflows/release.yml" });
+  const result = await f.run("plan", { GITHUB_EVENT_NAME: "workflow_dispatch", RELEASE_RECOVER_RUN: "77", RELEASE_RECOVER_BEFORE: f.baseline });
+  expect(result.code).toBe(1);
+  expect(result.stderr).toContain("original push run");
+  expect(f.requests.every((request) => request.startsWith("GET "))).toBe(true);
 });
 
 test("direct pushes and substituted workflow source SHAs fail before mutation", async () => {

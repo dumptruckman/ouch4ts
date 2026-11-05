@@ -21,7 +21,9 @@ The adapter checks the registry-held SLSA provenance's source commit, workflow, 
 3. Check that the workflow's `GITHUB_SHA` equals the recorded source. The original run ID in the record still determines the preview version.
 4. After recovery succeeds, remove the temporary environment allowance.
 
-Dispatching at a newer branch tip and checking out older code fails source validation. Do not override GitHub provenance variables. An unplanned source must first run from its original push event, which supplies the predecessor SHA.
+If the original run was canceled before planning, also set `recover_run` to that push run's ID and `recover_before` to the preceding processed source or baseline tag's commit. The adapter verifies the original run's source, branch, and workflow. It checks that every intervening first-parent commit belongs to the frozen merged PR, then checks predecessor completion. These inputs cannot change an existing plan.
+
+Dispatching at a newer branch tip and checking out older code fails source validation. Do not override GitHub provenance variables.
 
 GitHub can reject historical tag or release repair when the built-in token lacks workflow-file write access. Use your account with workflow-write access to repair the exact tag or release. Preserve the retained tarball and recorded source, then rerun the original source workflow. Do not add a PAT to the repository to bypass this restriction.
 
