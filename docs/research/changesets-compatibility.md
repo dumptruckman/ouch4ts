@@ -14,7 +14,7 @@ Evidence below has three limits. **Locally verified** means the saved fixture ex
 
 ## The comparison preserves the whole contract
 
-The baseline is repository commit `30623c51e78f91c60d16a272f654a1e3ba843627`, especially `docs/releases.md`, `docs/release-recovery.md`, and the release adapter. That commit is in the implementation checkout and is not yet on remote `main`. This report-only branch starts from remote `main` to avoid uploading unrelated workflow changes. Local implementation paths in this report refer to that exact inspected commit, for example `git show 30623c51e78f91c60d16a272f654a1e3ba843627:scripts/release/publish.ts`. Contributors select exactly one of `release:major`, `release:minor`, `release:patch`, or `no release`. They do not write changesets, release notes, or specially formatted commits. Recorded merges freeze those decisions. The largest pending bump determines the candidate version.
+The baseline is repository commit `30623c51e78f91c60d16a272f654a1e3ba843627`, especially `docs/releases.md`, `docs/release-recovery.md`, and the release adapter. The report-only branch starts from the earlier remote baseline `3e7563f434b0d7e44d30c26f60850f43016c90f9` and contains no implementation changes. Implementation paths refer to the exact inspected commit, for example `git show 30623c51e78f91c60d16a272f654a1e3ba843627:scripts/release/publish.ts`. Contributors select exactly one of `release:major`, `release:minor`, `release:patch`, or `no release`. They do not write changesets, release notes, or specially formatted commits. Recorded merges freeze those decisions. The largest pending bump determines the candidate version.
 
 | Required behavior | Native compatibility | Responsibility that remains |
 | --- | --- | --- |
