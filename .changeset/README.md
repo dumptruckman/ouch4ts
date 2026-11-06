@@ -1,5 +1,10 @@
 # Release inputs
 
-Feature authors select one release label on their PR. The release adapter generates temporary `pr-<number>.md` inputs from frozen merge records. Changesets consumes these inputs when it prepares the rolling release PR.
+Feature authors select one [release label](../docs/development.md#select-a-release-label)
+on their PR. The release adapter generates temporary `pr-<number>.md` inputs from
+recorded merge data. Changesets consumes these inputs to prepare the rolling
+release PR.
 
-Do not commit generated inputs or run `changeset add` for ordinary changes. See [release setup](../docs/release-setup.md) and [release recovery](../docs/release-recovery.md).
+For ordinary changes, leave this directory to the release adapter. Do not commit
+generated inputs or run `changeset add`. See the [release process](../docs/releases.md),
+[release setup](../docs/release-setup.md), and [release recovery](../docs/release-recovery.md).
