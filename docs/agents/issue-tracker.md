@@ -1,4 +1,4 @@
-# Issue tracker: GitHub
+# GitHub issue workflow
 
 Issues and specs live in GitHub Issues for `dumptruckman/ouch4ts`.
 Use the `gh` CLI from this clone.
@@ -27,8 +27,11 @@ Fetching a ticket means reading its GitHub issue.
 
 Use native GitHub sub-issues and issue dependencies.
 
-Get an issue's numeric database ID with:
-`gh api repos/dumptruckman/ouch4ts/issues/<number> --jq .id`.
+To get an issue's numeric database ID, run:
+
+```bash
+gh api 'repos/dumptruckman/ouch4ts/issues/<number>' --jq .id
+```
 
 - Add a child:
   `gh api --method POST repos/dumptruckman/ouch4ts/issues/<parent>/sub_issues -F sub_issue_id=<child-database-id>`.
@@ -42,14 +45,16 @@ parent and put `Part of #<parent>` at the top of the child body.
 If dependencies are unavailable, put `Blocked by: #<number>` at the
 top of the child body. Work can start when every blocker is closed.
 
-## Pull requests as a triage surface
+## Pull requests
 
-**PRs as a request surface: no.**
+Use GitHub Issues for work requests. Pull requests are not used for triage.
 
-## Wayfinding operations
+## Wayfinding workflow
 
-- Map: one issue labelled `wayfinder:map`, containing Notes,
-  Decisions-so-far, and Fog.
+Use these conventions when a wayfinding skill is active:
+
+- Map: one issue labeled `wayfinder:map`, containing **Notes**,
+  **Decisions-so-far**, and **Fog**.
 - Child: link it to the map and label it `wayfinder:<type>`,
   using research, prototype, grilling, or task.
 - Frontier: choose the first open child in map order with no

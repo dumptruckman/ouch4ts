@@ -2,15 +2,15 @@
 
 ## Code clarity
 
-- Keep each function at one level of abstraction. High-level functions should describe the steps of an operation;
-  helpers should contain the mechanics of those steps. Separate domain decisions from the actions that apply
+- Keep each function at one level of abstraction. High-level functions describe the steps of an operation.
+  Helpers contain the mechanics of those steps. Separate domain decisions from the actions that apply
   them when doing so makes the caller clearer. For example, `defaultCoverageCommand` chooses the coverage command,
   while `updateCoverage` runs it and checks that it updated the report.
 - Extract helpers around meaningful concepts. A helper should name an operation or decision so the caller can be
   understood without reading its implementation. A helper can be useful with only one caller.
 - Express compound domain conditions as named predicates when the name explains the decision better than the
   inline expression. Prefer positive names such as `canResolveMissingPath` or `isCallableImplementation` so callers
-  can state when an action applies. Keep guard clauses when they make control flow clearer; do not replace them
+  can state when an action applies. Keep guard clauses when they make control flow clearer. Do not replace them
   with nested positive branches just to avoid negation.
 - Make helper contracts self-contained. Handle the inputs permitted by the parameter types, or narrow those types
   to express the required preconditions. A helper accepting `unknown` should not rely on an undocumented caller
@@ -42,11 +42,11 @@ not automatically unclear.
 
 ## Tests
 
-- Use `test.each` or `describe.each` when multiple independent cases share the same test structure and differ
-  mainly in inputs and/or expected outcomes. Use ordinary tests for single cases or distinct behaviors. Keep batch
+- Use `test.each` or `describe.each` when independent cases share the same test structure and differ
+  mainly in inputs, expected outcomes, or both. Use ordinary tests for single cases or distinct behaviors. Keep batch
   tests when verifying interactions requires multiple entries in one execution. For example, analyze mutually
   recursive modules together to verify the call cycle and a caller outside it.
-- When a test covers multiple input/output cases, keep each case's setup and expected outcome together in one
+- When a test covers multiple cases, keep each case's input, setup, and expected outcome together in one
   case table. For tests that execute a batch, derive the input and expected-result arrays from that table instead
   of maintaining separate arrays matched by position. Apply this to nested data such as table rows too. Keep
   expected outcomes explicit and independent of the behavior under test. For example, pair each scoring case's
