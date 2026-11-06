@@ -1,0 +1,111 @@
+{
+  "node": "v24.22.1",
+  "npm": "11.19.1",
+  "changesets": "3.0.3",
+  "results": [
+    {
+      "name": "patch preview",
+      "versionExitCode": 0,
+      "version": "0.1.1-preview.1001",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": []
+    },
+    {
+      "name": "patch then minor preview",
+      "versionExitCode": 0,
+      "version": "0.2.0-preview.1002",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": [],
+      "packResult": {
+        "publish-plan.json": {
+          "version": 1,
+          "plan": [
+            [
+              {
+                "kind": "publish",
+                "name": "ouch-compatibility-fixture",
+                "version": "0.2.0-preview.1002",
+                "access": "public",
+                "tag": "preview",
+                "tarball": {
+                  "path": "packages/ouch-compatibility-fixture-0.2.0-preview.1002.tgz",
+                  "integrity": "sha256-CQ8wyY3JX88+XOh6tXLOZgo4JL9M+PBa6VkNWl/pJ2k="
+                }
+              }
+            ]
+          ]
+        },
+        "archives": [
+          "ouch-compatibility-fixture-0.2.0-preview.1002.tgz"
+        ],
+        "version": "0.2.0-preview.1002"
+      }
+    },
+    {
+      "name": "same preview on retry",
+      "versionExitCode": 0,
+      "version": "0.2.0-preview.1002",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": []
+    },
+    {
+      "name": "major preview",
+      "versionExitCode": 0,
+      "version": "1.0.0-preview.1003",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": []
+    },
+    {
+      "name": "stable patch",
+      "versionExitCode": 0,
+      "version": "0.1.1",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": []
+    },
+    {
+      "name": "stable highest bump",
+      "versionExitCode": 0,
+      "version": "0.2.0",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": []
+    },
+    {
+      "name": "no-release-only stable",
+      "versionExitCode": 1,
+      "version": "0.1.0",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": []
+    },
+    {
+      "name": "no-release after patch",
+      "versionExitCode": 0,
+      "version": "0.1.1",
+      "lockVersion": "0.1.0",
+      "rootLockVersion": "0.1.0",
+      "remainingChangesets": []
+    },
+    {
+      "name": "maintenance patch preview",
+      "versionExitCode": 0,
+      "version": "0.1.4-preview.1004",
+      "lockVersion": "0.1.3",
+      "rootLockVersion": "0.1.3",
+      "remainingChangesets": []
+    },
+    {
+      "name": "maintenance stable patch",
+      "versionExitCode": 0,
+      "version": "0.1.4",
+      "lockVersion": "0.1.3",
+      "rootLockVersion": "0.1.3",
+      "remainingChangesets": []
+    }
+  ]
+}
