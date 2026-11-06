@@ -45,7 +45,7 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
     { id: 2, tag_name: `record-${source}`, name: "Record", draft: true, target_commitish: source, body: JSON.stringify({ schema: 1, source, branch: "main", state: "recorded", pr }), assets: [] },
   ];
   const requests: string[] = [];
-  const registry = { value: {} as unknown, status: 404, version: "0.1.1", tarball: Buffer.alloc(0), tags: { latest: "0.1.0" } as Record<string, string>, publishCount: 0, ambiguousPublish: false, failFinalization: false };
+  const registry = { value: {} as unknown, status: 404, version: "0.1.1", tarball: Buffer.alloc(0), provenanceDigest: "", tags: { latest: "0.1.0" } as Record<string, string>, publishCount: 0, ambiguousPublish: false, failFinalization: false };
   const assets = new Map<number, Buffer>();
   const refs = new Map<string, string>();
   const pulls = new Map<number, unknown>();
@@ -66,11 +66,12 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
     if (req.url === "/attestations") {
       const publication = [...releases].flatMap((release) => release.assets).find((asset) => asset.name === "publication.json" && JSON.parse(assets.get(asset.id)?.toString() ?? "{}").version === registry.version);
       const source = publication ? JSON.parse(assets.get(publication.id)?.toString() ?? "{}").source : "";
-      const statement = { subject: [{ digest: { sha512: createHash("sha512").update(registry.tarball).digest("hex") } }], predicate: { buildDefinition: { externalParameters: { workflow: { repository: "https://github.com/test/repo", path: ".github/workflows/release.yml", ref: "refs/heads/main" } }, resolvedDependencies: [{ uri: "git+https://github.com/test/repo@refs/heads/main", digest: { gitCommit: source } }] } } };
+      const statement = { subject: [{ digest: { sha512: registry.provenanceDigest } }], predicate: { buildDefinition: { externalParameters: { workflow: { repository: "https://github.com/test/repo", path: ".github/workflows/release.yml", ref: "refs/heads/main" } }, resolvedDependencies: [{ uri: "git+https://github.com/test/repo@refs/heads/main", digest: { gitCommit: source } }] } } };
       res.end(JSON.stringify({ attestations: [{ predicateType: "https://slsa.dev/provenance/v1", bundle: { dsseEnvelope: { payload: Buffer.from(JSON.stringify(statement)).toString("base64") } } }] })); return;
     }
     if (req.url === "/npm/publish" && req.method === "PUT") {
       registry.tarball = await bodyBytes(req); registry.version = String(req.headers["x-version"]);
+      registry.provenanceDigest = createHash("sha512").update(registry.tarball).digest("hex");
       registry.publishCount++; registry.status = 200;
       registry.value = { version: registry.version, dist: { integrity: `sha512-${createHash("sha512").update(registry.tarball).digest("base64")}`, tarball: `${baseUrl}/tarball`, attestations: { url: `${baseUrl}/attestations` } } };
       registry.tags[String(req.headers["x-channel"])] = registry.version;
@@ -126,7 +127,7 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
   if (address === null || typeof address === "string") throw new Error("Missing test server address");
   baseUrl = `http://127.0.0.1:${address.port}`;
   const bin = path.join(root, "bin"); await mkdir(bin);
-  const realNpm = path.resolve(path.dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js");
+  const realNpm = process.env.npm_execpath ?? path.resolve(path.dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js");
   await writeFile(path.join(bin, "npm"), `#!${process.execPath}
 import {readFileSync} from 'node:fs'; import {execFileSync,spawnSync} from 'node:child_process';
 const args=process.argv.slice(2), registry=process.env.NPM_CONFIG_REGISTRY;
@@ -168,16 +169,66 @@ test("an ambiguous npm success recovers the original preview and never publishes
   const f = await fixture();
   f.registry.ambiguousPublish = true;
   const first = await f.run("publish", f.publisherEnv);
-  expect(first.stderr).toBe(""); expect(first.code).toBe(0);
+  expect(first.code, first.stderr).toBe(0);
   expect(f.registry.version).toBe("0.1.1-preview.123");
   expect(f.registry.publishCount).toBe(1);
   const retry = await f.run("publish", { ...f.publisherEnv, GITHUB_RUN_ID: "999" });
-  expect(retry.stderr).toBe(""); expect(retry.code).toBe(0);
+  expect(retry.code, retry.stderr).toBe(0);
   expect(f.registry.publishCount).toBe(1);
   expect(f.registry.version).toBe("0.1.1-preview.123");
   const record = f.releases.find((release) => release.tag_name === `record-${f.source}`);
   expect(JSON.parse(record?.body ?? "{}")).toMatchObject({ runId: "123", state: "preview verified" });
   expect(record?.assets.map((asset) => asset.name).sort()).toEqual(["SHA256SUMS", "ouch4ts.tgz", "publication.json"]);
+}, 20000);
+
+test("a registry outage before publication preserves the original artifact for recovery", async () => {
+  const f = await fixture();
+  f.registry.version = "0.1.1-preview.123";
+  f.registry.status = 500;
+  const failed = await f.run("publish", f.publisherEnv);
+  expect(failed.code).toBe(1);
+  expect(failed.stderr).toContain("npm registry verification failed: 500");
+  expect(f.registry.publishCount).toBe(0);
+  const record = f.releases.find((release) => release.tag_name === `record-${f.source}`);
+  const artifact = record?.assets.find((asset) => asset.name === "ouch4ts.tgz");
+  if (!artifact) throw new Error("Missing retained artifact");
+  const bytes = Buffer.from(await (await fetch(artifact.url)).arrayBuffer());
+  expect(JSON.parse(record?.body ?? "{}")).toMatchObject({ state: "artifact verified", runId: "123" });
+
+  f.registry.status = 404;
+  const recovered = await f.run("publish", { ...f.publisherEnv, GITHUB_RUN_ID: "999" });
+  expect(recovered.code, recovered.stderr).toBe(0);
+  expect(f.registry.version).toBe("0.1.1-preview.123");
+  expect(f.registry.publishCount).toBe(1);
+  expect(f.registry.tarball.equals(bytes)).toBe(true);
+}, 20000);
+
+test("maintenance previews use their own channel and preserve newer main channels", async () => {
+  const f = await fixture();
+  f.releases.push({ id: 3, name: "Newer main release", draft: false, tag_name: "v0.2.0", target_commitish: f.baseline, body: "Newer main line", assets: [] });
+  const record = f.releases.find((release) => release.tag_name === `record-${f.source}`);
+  if (!record) throw new Error("Missing merge record");
+  record.body = JSON.stringify({ schema: 1, source: f.source, branch: "maintenance/0.1", state: "recorded", pr: f.pr });
+  f.registry.tags = { latest: "0.2.0", preview: "0.2.1-preview.200" };
+  const result = await f.run("publish", { ...f.publisherEnv, RELEASE_BRANCH: "maintenance/0.1", GITHUB_WORKFLOW_REF: "test/repo/.github/workflows/release.yml@refs/heads/maintenance/0.1" });
+  expect(result.code, result.stderr).toBe(0);
+  expect(f.registry.version).toBe("0.1.1-preview.123");
+  expect(f.registry.tags).toEqual({ latest: "0.2.0", preview: "0.2.1-preview.200", "preview-0.1": "0.1.1-preview.123" });
+}, 20000);
+
+test.each([
+  { failure: "substituted source", error: "npm provenance source, workflow, or artifact differs from the release plan" },
+  { failure: "corrupted tarball", error: "npm tarball bytes differ from the retained artifact" },
+])("registry verification rejects a $failure", async ({ failure, error }) => {
+  const f = await fixture();
+  const published = await f.run("publish", f.publisherEnv);
+  expect(published.code, published.stderr).toBe(0);
+  const integrity = `sha512-${createHash("sha512").update(f.registry.tarball).digest("base64")}`;
+  if (failure === "corrupted tarball") f.registry.tarball = Buffer.from("different artifact");
+  await expect(verifyRegistryArtifact({
+    registry: f.registryUrl, repository: "test/repo", version: "0.1.1-preview.123", integrity,
+    source: failure === "substituted source" ? f.baseline : f.source,
+  })).rejects.toThrow(error);
 }, 20000);
 
 test("stable recovery finishes GitHub after npm success without changing version or rewinding latest", async () => {

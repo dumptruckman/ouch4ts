@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -60,9 +60,10 @@ export function packArtifact(version: string): Buffer {
     const pkg = z.object({ version: z.string() }).parse(JSON.parse(readFileSync("package.json", "utf8")));
     if (pkg.version !== version) execFileSync("npm", ["version", version, "--no-git-tag-version", "--ignore-scripts"], { stdio: "inherit" });
     execFileSync("npm", ["run", "build"], { stdio: "inherit" });
-    const packed = z.array(z.object({ filename: z.string() })).parse(JSON.parse(execFileSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", temp], { encoding: "utf8" })));
-    const filename = packed[0]?.filename;
-    if (!filename) throw new Error("npm pack produced no artifact");
+    execFileSync("npm", ["pack", "--ignore-scripts", "--pack-destination", temp], { stdio: "pipe" });
+    const archives = readdirSync(temp).filter((file) => file.endsWith(".tgz"));
+    const [filename] = archives;
+    if (archives.length !== 1 || !filename) throw new Error("npm pack must produce exactly one artifact");
     const archive = path.join(temp, filename);
     const entries = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).trim().split("\n");
     if (entries.some((entry) => !/^package\/(package\.json|README\.md|LICENSE|CHANGELOG\.md|dist\/[\w/-]+\.(js|d\.ts))$/.test(entry))) throw new Error("Packed artifact contains files outside the MIT distribution");
