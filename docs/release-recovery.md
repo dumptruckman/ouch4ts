@@ -24,6 +24,12 @@ After `npm publish` succeeds, the workflow waits up to 20 minutes for the
 registry tarball and provenance. If verification times out, wait for the version
 to appear on npm, then rerun the original workflow.
 
+After updating an npm dist-tag, the workflow checks the registry for up to five
+minutes. It logs stale or missing tag values while waiting and the confirmed
+version on success. If confirmation times out, check the tags with
+`npm dist-tag ls ouch4ts` and rerun the original workflow. It verifies the
+retained package and skips tags that already point to the intended or a newer version.
+
 ## Recover after GitHub's rerun window
 
 1. Create or select a protected recovery source tag at the original source SHA.

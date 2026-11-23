@@ -8,7 +8,7 @@ import semver from "semver";
 import { z } from "zod";
 import { GitHubError, releaseSchema, type GitHub, type Release } from "./github.ts";
 import { minorLine, releaseLabel, releaseNotes } from "./plan.ts";
-import { canAdvanceChannel, checksums, packArtifact, publicationSchema, readMatchingManifest, registryTags, verifyRegistryArtifact, type Publication } from "./publication.ts";
+import { canAdvanceChannel, checksums, confirmChannel, packArtifact, publicationSchema, readMatchingManifest, registryTags, verifyRegistryArtifact, type Publication } from "./publication.ts";
 import { loadRun, type runContext } from "./state.ts";
 
 const exec = promisify(execFile);
@@ -76,13 +76,12 @@ async function publishOrVerify(input: { publication: Publication; bytes: Buffer;
 
 async function moveChannels(publication: Publication): Promise<void> {
   const registry = registryUrl();
-  const tags = await registryTags(registry);
   const channels = semver.prerelease(publication.version) ? [publication.channel] : [publication.channel, "latest"];
   for (const channel of new Set(channels)) {
-    if (!canAdvanceChannel(tags[channel], publication.version, channel) || tags[channel] === publication.version) continue;
+    const current = (await registryTags(registry))[channel];
+    if (!canAdvanceChannel(current, publication.version, channel) || current === publication.version) continue;
     await exec("npm", ["dist-tag", "add", `ouch4ts@${publication.version}`, channel, "--registry", registry]);
-    const confirmed = await registryTags(registry);
-    if (confirmed[channel] !== publication.version) throw new Error(`npm did not confirm ${channel}; recover the original publication`);
+    await confirmChannel({ registry, channel, version: publication.version });
   }
 }
 

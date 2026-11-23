@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 import packageManifest from "../package.json" with { type: "json" };
-import { verifyRegistryArtifact } from "../scripts/release/publication.ts";
+import { confirmChannel, verifyRegistryArtifact } from "../scripts/release/publication.ts";
 import type { Release } from "../scripts/release/github.ts";
 import { recordSchema } from "../scripts/release/state.ts";
 import { planSchema } from "../scripts/release/plan.ts";
@@ -56,12 +56,14 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
     tags: { latest: "0.1.0" } as Record<string, string>,
     publishCount: 0,
     ambiguousPublish: false,
+    staleTagReadAfterUpdate: false,
     failFinalization: false,
     visibleAt: 0,
     scanDurationMs: 0,
     hideProvenanceOnce: false,
     interruptTarballOnce: false,
   };
+  let tagsBeforeUpdate: typeof registry.tags | undefined;
   const assets = new Map<number, Buffer>();
   const refs = new Map<string, string>();
   const pulls = new Map<number, unknown>();
@@ -88,7 +90,11 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
       res.end(JSON.stringify(registry.value));
       return;
     }
-    if (req.url === "/-/package/ouch4ts/dist-tags") { res.end(JSON.stringify(registry.tags)); return; }
+    if (req.url === "/-/package/ouch4ts/dist-tags") {
+      res.end(JSON.stringify(tagsBeforeUpdate ?? registry.tags));
+      tagsBeforeUpdate = undefined;
+      return;
+    }
     if (req.url === "/tarball") {
       if (registry.interruptTarballOnce) {
         registry.interruptTarballOnce = false;
@@ -113,7 +119,10 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
       res.statusCode = registry.ambiguousPublish ? 500 : 200; res.end("{}"); return;
     }
     if (req.url === "/npm/tag" && req.method === "POST") {
-      const data = JSON.parse((await bodyBytes(req)).toString()); registry.tags[data.channel] = data.version; res.end("{}"); return;
+      const data = JSON.parse((await bodyBytes(req)).toString());
+      if (registry.staleTagReadAfterUpdate) tagsBeforeUpdate = { ...registry.tags };
+      registry.tags[data.channel] = data.version;
+      res.end("{}"); return;
     }
     if (req.url?.startsWith("/repos/test/repo/releases?")) { res.end(JSON.stringify(releases)); return; }
     const originalRun = req.url?.match(/^\/repos\/test\/repo\/actions\/runs\/(\d+)$/);
@@ -299,7 +308,7 @@ test.each([
   expect(f.requests.filter((request) => request === "GET /ouch4ts/0.1.1-preview.123")).toHaveLength(1);
 }, 20000);
 
-test("stable recovery finishes GitHub after npm success without changing version or rewinding latest", async () => {
+async function stableFixture() {
   const f = await fixture();
   expect((await f.run("publish", f.publisherEnv)).code).toBe(0);
   const previous = f.releases.find((release) => release.tag_name === `record-${f.source}`);
@@ -318,6 +327,23 @@ test("stable recovery finishes GitHub after npm success without changing version
   f.releases.push({ id: 3, name: "Stable record", draft: true, tag_name: `record-${stableSource}`, target_commitish: stableSource, assets: [], body: JSON.stringify({ schema: 1, source: stableSource, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, title: "Release ouch4ts", head: "changeset-release/main", author: "github-actions[bot]" } }) });
   await writeFile(f.eventFile, JSON.stringify({ before: f.source, after: stableSource }));
   const env = { ...f.publisherEnv, GITHUB_SHA: stableSource, GITHUB_RUN_ID: "124" };
+  return { f, record, stableSource, env };
+}
+
+test("stable publication waits for latest to become visible after one tag update", async () => {
+  const { f, env } = await stableFixture();
+  f.registry.staleTagReadAfterUpdate = true;
+  const result = await f.run("publish", env);
+  expect(result.code, result.stderr).toBe(0);
+  expect(result.stderr).toContain("observed 0.1.0");
+  expect(result.stderr).toContain("Confirmed npm latest=0.1.1");
+  expect(f.requests.filter(request => request === "POST /npm/tag")).toHaveLength(1);
+  expect(f.registry.publishCount).toBe(2); // One preview and one stable publication.
+  expect(f.releases.find(release => release.tag_name === "v0.1.1")?.draft).toBe(false);
+}, 20_000);
+
+test("stable recovery finishes GitHub after npm success without changing version or rewinding latest", async () => {
+  const { f, record, stableSource, env } = await stableFixture();
   await writeFile(path.join(f.root, ".release/plan.json"), JSON.stringify({ ...record.plan, source: f.baseline }));
   expect((await f.run("plan", env)).stderr).toContain("stale");
   await writeFile(path.join(f.root, ".release/plan.json"), JSON.stringify(record.plan));
@@ -350,6 +376,15 @@ test("verification stops at the deadline when the registry still has no version"
   const input = { registry: f.registryUrl, version: "0.1.1", source: f.source, integrity: "sha512-correct", repository: "test/repo" };
   expect(await verifyRegistryArtifact(input, { timeoutMs: 100, intervalMs: 30_000 })).toBe(false);
   expect(f.requests).toContain("GET /ouch4ts/0.1.1");
+});
+
+test.each([
+  { channel: "latest", observed: "0.1.0" },
+  { channel: "release-0.1", observed: "<unset>" },
+])("tag confirmation reports the last observed value of $channel at the deadline", async ({ channel, observed }) => {
+  const f = await fixture();
+  await expect(confirmChannel({ registry: f.registryUrl, channel, version: "0.1.1" }, { timeoutMs: 200, intervalMs: 30_000 }))
+    .rejects.toThrow(`Timed out confirming npm ${channel}=0.1.1 (observed ${observed}); recover the original publication`);
 });
 
 test.each([
