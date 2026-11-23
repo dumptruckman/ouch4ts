@@ -14,8 +14,9 @@ requested bump. Merging a current, approved release PR publishes the stable
 package. A `no release` merge refreshes a pending proposal without publishing a
 preview.
 
-GitHub lists each verified preview as a pre-release with its full npm version,
-such as `ouch4ts 0.1.3-preview.123`. The highest published stable version
+After npm verification, the workflow marks the existing GitHub draft as a
+pre-release and names it with the npm version and PR number, such as
+`ouch4ts 0.1.3-preview.123 (PR #23)`. The highest published stable version
 gets the Latest badge, including when a maintenance release ships later.
 
 The release adapter generates temporary changeset inputs from recorded merge
@@ -32,8 +33,8 @@ are manual.
 ## Publication records and retries
 
 A draft `record-<source SHA>` release stores the PR, predecessor, original run ID,
-release plan, and progress. Its title identifies the PR by number and title.
-Each published version has a separate `v<version>` release.
+release plan, and progress. Its initial title identifies the PR by number and title.
+Each stable version has a separate `v<version>` release.
 Retained `ouch4ts.tgz`, `publication.json`, and `SHA256SUMS` assets bind a retry to
 the same artifact and source.
 

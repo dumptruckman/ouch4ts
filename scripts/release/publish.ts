@@ -85,7 +85,7 @@ async function moveChannels(publication: Publication): Promise<void> {
   }
 }
 
-async function finalizeRelease(input: { github: GitHub; release: Release; publication: Publication; prerelease: boolean; latest: boolean; notes: string }): Promise<void> {
+async function finalizeStable(input: { github: GitHub; release: Release; publication: Publication; latest: boolean; notes: string }): Promise<void> {
   const tag = `v${input.publication.version}`;
   let exists = false;
   try {
@@ -95,7 +95,7 @@ async function finalizeRelease(input: { github: GitHub; release: Release; public
     exists = true;
   } catch (error) { if (!(error instanceof GitHubError && error.status === 404)) throw error; }
   if (!exists) await input.github.request("POST", "git/refs", { ref: `refs/tags/${tag}`, sha: input.publication.source });
-  await input.github.update(input.release, { draft: false, prerelease: input.prerelease, make_latest: input.latest ? "true" : "false", body: input.notes, target_commitish: input.publication.source });
+  await input.github.update(input.release, { draft: false, prerelease: false, make_latest: input.latest ? "true" : "false", body: input.notes, target_commitish: input.publication.source });
 }
 
 export async function publishRelease(context: ReturnType<typeof runContext>): Promise<void> {
@@ -126,21 +126,28 @@ export async function publishRelease(context: ReturnType<typeof runContext>): Pr
   const version = stable ? plan.version : `${plan.version}-preview.${active.runId}`;
   const channel = stable ? `release-${minorLine(plan.version)}` : active.branch === "main" ? "preview" : `preview-${minorLine(plan.version)}`;
   const notes = releaseNotes(plan, active.source, env.GITHUB_REPOSITORY);
-  const release = run.releases.find(entry => entry.tag_name === `v${version}`) ?? await github.create({
-    tag_name: `v${version}`, target_commitish: active.source, name: `ouch4ts ${version}`, draft: true, prerelease: !stable, body: notes,
-  });
-  const retained = await retainArtifact({ github, release: stable ? release : run.release, version, source: active.source, runId: active.runId, channel });
+  let release = run.release;
+  if (stable) {
+    release = run.releases.find(entry => entry.tag_name === `v${version}`) ?? await github.create({
+      tag_name: `v${version}`, target_commitish: active.source, name: `ouch4ts ${version}`, draft: true,
+      body: notes,
+    });
+  }
+  const retained = await retainArtifact({ github, release, version, source: active.source, runId: active.runId, channel });
   await github.update(run.release, { body: JSON.stringify({ ...active, state: "artifact verified" }, null, 2) });
   await publishOrVerify({ ...retained, repository: env.GITHUB_REPOSITORY });
   await github.update(run.release, { body: JSON.stringify({ ...active, state: "npm verified" }, null, 2) });
   await moveChannels(retained.publication);
-  const latest = stable && publishedStableVersions(run.releases).every(published => semver.lte(published, version));
-  await finalizeRelease({ github, release, publication: retained.publication, notes, prerelease: !stable, latest });
   if (stable) {
+    const latest = publishedStableVersions(run.releases).every(published => semver.lte(published, version));
+    await finalizeStable({ github, release, publication: retained.publication, notes, latest });
     await github.update(run.release, { body: JSON.stringify({ ...active, state: "github complete" }, null, 2) });
     outputs(active.branch, false);
   } else {
-    await github.update(run.release, { body: JSON.stringify({ ...active, state: "preview verified" }, null, 2) });
+    await github.update(run.release, {
+      name: `ouch4ts ${version} (PR #${active.pr.number})`, prerelease: true,
+      body: JSON.stringify({ ...active, state: "preview verified" }, null, 2),
+    });
     outputs(active.branch, true);
   }
 }

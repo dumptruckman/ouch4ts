@@ -228,10 +228,9 @@ test("an ambiguous npm success recovers the original preview and never publishes
   expect(f.registry.version).toBe("0.1.1-preview.123");
   const record = f.releases.find((release) => release.tag_name === `record-${f.source}`);
   expect(JSON.parse(record?.body ?? "{}")).toMatchObject({ runId: "123", state: "preview verified" });
-  expect(record?.draft).toBe(true);
-  expect(f.releases.filter(release => release.tag_name === "v0.1.1-preview.123")).toMatchObject([
-    { name: "ouch4ts 0.1.1-preview.123", draft: false, prerelease: true, make_latest: "false", target_commitish: f.source },
-  ]);
+  expect(record).toMatchObject({ draft: true, prerelease: true, name: "ouch4ts 0.1.1-preview.123 (PR #1)" });
+  expect(f.requests).not.toContain("POST /repos/test/repo/releases");
+  expect(f.requests).not.toContain("POST /repos/test/repo/git/refs");
   expect(record?.assets.map((asset) => asset.name).sort()).toEqual(["SHA256SUMS", "ouch4ts.tgz", "publication.json"]);
 }, 20000);
 

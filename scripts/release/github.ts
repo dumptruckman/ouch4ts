@@ -7,6 +7,7 @@ export const releaseSchema = z.object({
 });
 export type Release = z.infer<typeof releaseSchema>;
 type ReleaseUpdate = Pick<Release, "body"> & Partial<Pick<Release, "target_commitish" | "draft">> & {
+  name?: string;
   prerelease?: boolean;
   make_latest?: "true" | "false";
 };
