@@ -2,10 +2,10 @@
 
 `ouch4ts` reports file complexity and function maintenance scores for JavaScript,
 TypeScript, and mixed projects. It provides a CLI, a typed ESM API, and an
-[agent skill](skills/ouch4ts/SKILL.md).
+[agent skill](https://github.com/dumptruckman/ouch4ts/blob/main/skills/ouch4ts/SKILL.md).
 The analyzer requires Node 22 or newer.
 
-Run your project's installed `ouch4ts` with `--help` to list the CLI options.
+Run your project's installed `ouch4ts` with `--help` to list the CLI options and find the installed CLI reference.
 For a one-off run, use `npx --yes ouch4ts@latest --help`.
 
 OUCH stands for Overall Upkeep and Change Hassle. It adds cognitive complexity to
@@ -33,11 +33,11 @@ The guides and references cover these tasks and details:
   options, configuration, report fields, filtering, and exit codes.
 - [Library reference](docs/library.md):
   `analyze`, `analyzeReport`, and `AnalysisOptions`.
-- [Measurement conventions](skills/ouch4ts/references/measurement.md):
+- [Measurement conventions](docs/measurement.md):
   score formulas, complexity rules, source selection, and coverage limits.
-- [Develop and package ouch4ts](docs/development.md):
+- [Develop and package ouch4ts](https://github.com/dumptruckman/ouch4ts/blob/main/docs/development.md):
   local checks, package contents, and release labels.
-- [Release process](docs/releases.md):
+- [Release process](https://github.com/dumptruckman/ouch4ts/blob/main/docs/releases.md):
   previews, stable releases, maintenance branches, and publication recovery.
 
 ## Licenses
@@ -45,5 +45,5 @@ The guides and references cover these tasks and details:
 The analyzer and root npm package use the
 [MIT license](LICENSE).
 The companion skill and all files under `skills/ouch4ts` use the separate
-[0BSD license](skills/ouch4ts/LICENSE).
+[0BSD license](https://github.com/dumptruckman/ouch4ts/blob/main/skills/ouch4ts/LICENSE).
 The npm package excludes skill assets.

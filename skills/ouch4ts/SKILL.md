@@ -36,9 +36,10 @@ Identify the package the user wants to analyze and the question the report must 
      its cache. If npm cannot resolve `latest`, report the failure. If an exact version
      is cached, name the version and ask before using `npx --offline --yes ouch4ts@<version>`.
 3. Select a Node runtime that satisfies the analyzer's `engines.node`. Use the chosen
-   command with `--version` and `--help`. If you need more detail, consult the matching
-   README or `docs/cli.md` at the stable release's `v<version>` tag in the
-   [analyzer repository](https://github.com/dumptruckman/ouch4ts).
+   command with `--version` and `--help`. If you need coverage, comparison, configuration, or
+   scoring details, open the local CLI reference printed by `--help` and follow its links.
+   For older stable releases that omit the guides, use `docs/cli.md` at the matching
+   `v<version>` tag in the [analyzer repository](https://github.com/dumptruckman/ouch4ts).
 
 ## Run the report
 
@@ -75,7 +76,7 @@ commits the analyzer measured and which reports it reused from cache.
 
 Report CRAP alongside OUCH. CRAP reflects cyclomatic complexity and line coverage. OUCH
 adds cognitive complexity, so a fully covered function can still be hard to follow. Use the
-[measurement conventions](references/measurement.md) to explain a score.
+[worked example](references/measurement.md) to explain a score.
 
 For `N/A`, check LCOV inclusion, paths, and source maps before drawing conclusions about
 tests. LCOV counts executable lines. A hit alone tells you nothing about what a test

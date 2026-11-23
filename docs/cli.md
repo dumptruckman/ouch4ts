@@ -8,6 +8,7 @@ ouch4ts [options] [path-fragment ...]
 
 An installed package exposes `ouch4ts` through npm scripts, npm exec, npx, or a
 global installation. `--help` and `--version` require no target project setup.
+`--help` prints the absolute path to this reference in the running package.
 
 ## Options
 
@@ -85,7 +86,7 @@ The default source root is `src`. Discovery includes `.js`, `.jsx`, `.mjs`,
 `.cjs`, `.ts`, `.tsx`, `.mts`, and `.cts`. Tests, TypeScript declarations, and
 common build directories are excluded. JavaScript projects need no TypeScript
 configuration or dependency. The
-[source selection rules](../skills/ouch4ts/references/measurement.md#source-discovery-and-cyclomatic-complexity)
+[source selection rules](measurement.md#source-discovery-and-cyclomatic-complexity)
 list the files and directories skipped by default.
 
 Package-manager detection uses the nearest `package.json` with `packageManager`
@@ -168,7 +169,7 @@ coverage is unknown and sort by descending cognitive complexity, then path.
 
 File CC uses different syntax rules from function CC. File cognitive complexity
 includes module code and counts nested functions once. The
-[measurement conventions](../skills/ouch4ts/references/measurement.md)
+[measurement conventions](measurement.md)
 define both counters and the score formulas.
 
 ### Changed-function selection

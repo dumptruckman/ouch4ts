@@ -159,7 +159,7 @@ commands, cache rules, and function matching.
 
 ## Install the agent skill
 
-Copy the complete [`skills/ouch4ts` directory](../skills/ouch4ts), including its
+Copy the complete [`skills/ouch4ts` directory](https://github.com/dumptruckman/ouch4ts/tree/main/skills/ouch4ts), including its
 license and references, into your agent's skill directory. For Codex, the
 destination is `~/.agents/skills/ouch4ts/`. The copy works independently of
 the analyzer repository. You can also link that directory from a checkout.
@@ -167,4 +167,4 @@ the analyzer repository. You can also link that directory from a checkout.
 Invoke `$ouch4ts` with a question such as "How did this PR change maintenance
 hassle compared with its base?" The skill uses the selected project's analyzer
 when available. Otherwise it asks whether to add the dependency or run the
-published analyzer once. See the [skill's project write policy](../skills/ouch4ts/SKILL.md#project-writes).
+published analyzer once. See the [skill's project write policy](https://github.com/dumptruckman/ouch4ts/blob/main/skills/ouch4ts/SKILL.md#project-writes).

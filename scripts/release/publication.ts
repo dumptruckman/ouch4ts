@@ -103,6 +103,24 @@ export async function verifyRegistryArtifact(input: RegistryArtifact, wait?: { t
   return false;
 }
 
+function verifyPackageContents(entries: string[]) {
+  const required = [
+    "package/package.json", "package/LICENSE", "package/README.md",
+    "package/dist/cli.js", "package/dist/index.js", "package/dist/index.d.ts",
+    "package/docs/analyze-project.md", "package/docs/cli.md", "package/docs/comparison.md",
+    "package/docs/coverage.md", "package/docs/library.md", "package/docs/measurement.md",
+  ];
+  const allowed = new Set([...required, "package/CHANGELOG.md"]);
+  for (const entry of entries) {
+    if (!allowed.has(entry) && !/^package\/dist\/[\w/-]+\.(js|d\.ts)$/.test(entry)) {
+      throw new Error(`Packed artifact contains files outside the MIT distribution: ${entry}`);
+    }
+  }
+  for (const file of required) {
+    if (!entries.includes(file)) throw new Error(`Packed artifact is missing ${file}`);
+  }
+}
+
 export function packArtifact(version: string): Buffer {
   const temp = mkdtempSync(path.join(tmpdir(), "ouch-artifact-"));
   try {
@@ -115,10 +133,7 @@ export function packArtifact(version: string): Buffer {
     if (archives.length !== 1 || !filename) throw new Error("npm pack must produce exactly one artifact");
     const archive = path.join(temp, filename);
     const entries = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).trim().split("\n");
-    if (entries.some((entry) => !/^package\/(package\.json|README\.md|LICENSE|CHANGELOG\.md|dist\/[\w/-]+\.(js|d\.ts))$/.test(entry))) throw new Error("Packed artifact contains files outside the MIT distribution");
-    for (const required of ["package/package.json", "package/LICENSE", "package/README.md", "package/dist/cli.js", "package/dist/index.js", "package/dist/index.d.ts"]) {
-      if (!entries.includes(required)) throw new Error(`Packed artifact is missing ${required}`);
-    }
+    verifyPackageContents(entries);
     execFileSync("npm", ["install", "--prefix", path.join(temp, "install"), "--ignore-scripts", "--omit=dev", "--no-package-lock", "--no-audit", "--no-fund", archive], { stdio: "inherit" });
     const installed = path.join(temp, "install/node_modules/ouch4ts");
     const actualVersion = execFileSync(process.execPath, [path.join(installed, "dist/cli.js"), "--version"], { encoding: "utf8" }).trim();

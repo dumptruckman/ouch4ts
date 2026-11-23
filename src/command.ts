@@ -74,7 +74,9 @@ Repeated flags replace configured lists. Case-sensitive path fragments filter st
 File rows sort by cognitive complexity or its delta; function rows sort by OUCH or its delta.
 Complete reports write ouch.json or ouch-comparison.json in the output directory.
 Fresh coverage runs a shell command; comparisons also install dependencies in temporary checkouts.
-Diagnostics and command output use stderr. Failures exit 1; unknown coverage stays null/N/A.`);
+Diagnostics and command output use stderr. Failures exit 1; unknown coverage stays null/N/A.
+
+CLI reference: ${fileURLToPath(new URL("../docs/cli.md", import.meta.url))}`);
     return;
   }
   if (values.version) {

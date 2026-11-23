@@ -54,8 +54,8 @@ npm pack
 ```
 
 The build clears `dist` before compilation and rejects type errors. The package
-contains compiled JavaScript, TypeScript declarations, the README, package
-metadata, and the MIT license. It excludes source files, tests, source maps, and
+contains compiled JavaScript, TypeScript declarations, the README, the analyzer
+guides under `docs/`, package metadata, and the MIT license. It excludes source files, tests, source maps, and
 skill assets. `npm pack --ignore-scripts --dry-run` lists the contents of the
 current build without creating a tarball.
 
