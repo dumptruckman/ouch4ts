@@ -20,6 +20,10 @@ succeeds. Preserve the recorded version. Other release lines can continue.
 If the workflow reports a conflicting registry artifact, investigate the conflict
 before changing the release plan.
 
+After `npm publish` succeeds, the workflow waits up to 20 minutes for the
+registry tarball and provenance. If verification times out, wait for the version
+to appear on npm, then rerun the original workflow.
+
 ## Recover after GitHub's rerun window
 
 1. Create or select a protected recovery source tag at the original source SHA.

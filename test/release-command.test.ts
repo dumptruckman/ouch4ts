@@ -45,7 +45,7 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
     { id: 2, tag_name: `record-${source}`, name: "Record", draft: true, target_commitish: source, body: JSON.stringify({ schema: 1, source, branch: "main", state: "recorded", pr }), assets: [] },
   ];
   const requests: string[] = [];
-  const registry = { value: {} as unknown, status: 404, version: "0.1.1", tarball: Buffer.alloc(0), provenanceDigest: "", tags: { latest: "0.1.0" } as Record<string, string>, publishCount: 0, ambiguousPublish: false, failFinalization: false };
+  const registry = { value: {} as unknown, status: 404, version: "0.1.1", tarball: Buffer.alloc(0), provenanceDigest: "", tags: { latest: "0.1.0" } as Record<string, string>, publishCount: 0, ambiguousPublish: false, failFinalization: false, hiddenReads: 0 };
   const assets = new Map<number, Buffer>();
   const refs = new Map<string, string>();
   const pulls = new Map<number, unknown>();
@@ -60,7 +60,15 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
   const server = createServer(async (req, res) => {
     requests.push(`${req.method} ${req.url}`);
     res.setHeader("Content-Type", "application/json");
-    if (req.url === `/ouch4ts/${registry.version}`) { res.statusCode = registry.status; res.end(JSON.stringify(registry.value)); return; }
+    if (req.url === `/ouch4ts/${registry.version}`) {
+      res.statusCode = registry.status;
+      if (registry.hiddenReads > 0 && registry.publishCount > 0) {
+        registry.hiddenReads--;
+        res.statusCode = 404;
+      }
+      res.end(JSON.stringify(registry.value));
+      return;
+    }
     if (req.url === "/-/package/ouch4ts/dist-tags") { res.end(JSON.stringify(registry.tags)); return; }
     if (req.url === "/tarball") { res.end(registry.tarball); return; }
     if (req.url === "/attestations") {
@@ -117,7 +125,12 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
       const data: unknown = JSON.parse((await bodyBytes(req)).toString());
       const release = releases.find((entry) => entry.id === Number(match[1]));
       if (registry.failFinalization && release?.tag_name.startsWith("v") && data && typeof data === "object" && "draft" in data && data.draft === false) { res.statusCode = 500; res.end("{}"); return; }
-      if (release && data && typeof data === "object") { Object.assign(release, data); res.end(JSON.stringify(release)); return; }
+      if (release && data && typeof data === "object") {
+        if (release.draft && !("tag_name" in data)) release.tag_name = `untagged-${release.id}`;
+        Object.assign(release, data);
+        res.end(JSON.stringify(release));
+        return;
+      }
     }
     res.statusCode = 404; res.end(JSON.stringify({ message: "Not found" }));
   });
@@ -168,8 +181,10 @@ test("the release command plans an exact source from a frozen merge record", asy
 test("an ambiguous npm success recovers the original preview and never publishes twice", async () => {
   const f = await fixture();
   f.registry.ambiguousPublish = true;
+  f.registry.hiddenReads = 1;
   const first = await f.run("publish", f.publisherEnv);
   expect(first.code, first.stderr).toBe(0);
+  expect(first.stderr).toContain("Waiting for npm to verify ouch4ts@0.1.1-preview.123");
   expect(f.registry.version).toBe("0.1.1-preview.123");
   expect(f.registry.publishCount).toBe(1);
   const retry = await f.run("publish", { ...f.publisherEnv, GITHUB_RUN_ID: "999" });
@@ -203,6 +218,21 @@ test("a registry outage before publication preserves the original artifact for r
   expect(f.registry.tarball.equals(bytes)).toBe(true);
 }, 20000);
 
+test("registry verification waits for a submitted package to become visible", async () => {
+  const f = await fixture();
+  const result = await f.run("publish", f.publisherEnv);
+  expect(result.code, result.stderr).toBe(0);
+  const input = {
+    registry: f.registryUrl,
+    repository: "test/repo",
+    source: f.source,
+    version: f.registry.version,
+    integrity: `sha512-${createHash("sha512").update(f.registry.tarball).digest("base64")}`,
+  };
+  f.registry.hiddenReads = 6;
+  expect(await verifyRegistryArtifact(input, { timeoutMs: 2000, intervalMs: 10 })).toBe(true);
+});
+
 test("maintenance previews use their own channel and preserve newer main channels", async () => {
   const f = await fixture();
   f.releases.push({ id: 3, name: "Newer main release", draft: false, tag_name: "v0.2.0", target_commitish: f.baseline, body: "Newer main line", assets: [] });
@@ -225,10 +255,12 @@ test.each([
   expect(published.code, published.stderr).toBe(0);
   const integrity = `sha512-${createHash("sha512").update(f.registry.tarball).digest("base64")}`;
   if (failure === "corrupted tarball") f.registry.tarball = Buffer.from("different artifact");
+  f.requests.length = 0;
   await expect(verifyRegistryArtifact({
     registry: f.registryUrl, repository: "test/repo", version: "0.1.1-preview.123", integrity,
     source: failure === "substituted source" ? f.baseline : f.source,
-  })).rejects.toThrow(error);
+  }, { timeoutMs: 2000, intervalMs: 10 })).rejects.toThrow(error);
+  expect(f.requests.filter((request) => request === "GET /ouch4ts/0.1.1-preview.123")).toHaveLength(1);
 }, 20000);
 
 test("stable recovery finishes GitHub after npm success without changing version or rewinding latest", async () => {
@@ -275,6 +307,13 @@ test("a missing registry artifact is eligible for its original publication", asy
   const f = await fixture();
   const input = { registry: f.registryUrl, version: "0.1.1", source: f.source, integrity: "sha512-correct", repository: "test/repo" };
   expect(await verifyRegistryArtifact(input)).toBe(false);
+});
+
+test("verification stops at the deadline when the registry still has no version", async () => {
+  const f = await fixture();
+  const input = { registry: f.registryUrl, version: "0.1.1", source: f.source, integrity: "sha512-correct", repository: "test/repo" };
+  expect(await verifyRegistryArtifact(input, { timeoutMs: 100, intervalMs: 30_000 })).toBe(false);
+  expect(f.requests).toContain("GET /ouch4ts/0.1.1");
 });
 
 test.each([

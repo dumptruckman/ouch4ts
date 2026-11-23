@@ -60,13 +60,12 @@ async function publishOrVerify(input: { publication: Publication; bytes: Buffer;
       await exec("npm", ["publish", archive, "--ignore-scripts", "--access", "public", "--provenance", "--tag", input.publication.channel, "--registry", registry]);
     } catch (error) { publishError = error; }
   } finally { rmSync(temp, { recursive: true, force: true }); }
-  let verificationError: unknown;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try { if (await verifyRegistryArtifact(verifyInput)) return; }
-    catch (error) { verificationError = error; }
-    await setTimeout(1000 * (attempt + 1));
-  }
-  throw verificationError ?? publishError ?? new Error("npm did not expose the published version; rerun the original source run");
+  // A successful submission can take several minutes to clear npm's scan.
+  const wait = publishError
+    ? { timeoutMs: 15_000, intervalMs: 1_000 }
+    : { timeoutMs: 20 * 60_000, intervalMs: 30_000 };
+  if (await verifyRegistryArtifact(verifyInput, wait)) return;
+  throw publishError ?? new Error(`Timed out verifying ouch4ts@${input.publication.version}; rerun the original source run`);
 }
 
 async function moveChannels(publication: Publication): Promise<void> {
