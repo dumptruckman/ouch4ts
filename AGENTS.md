@@ -1,5 +1,6 @@
 # Agent instructions
 
+Run `git fetch origin` before beginning work. Start new work on a branch based on `origin/main`.
 Read `CODING_STANDARDS.md` before changing or reviewing code.
 Read `docs/agents/commit-guidelines.md` before making any commit.
 

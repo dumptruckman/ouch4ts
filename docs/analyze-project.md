@@ -3,44 +3,40 @@
 Use this guide to generate current scores, report changed functions, or compare
 commits. See the [CLI reference](cli.md) for all options and report fields.
 
-## Build the analyzer
+## Choose how to run the analyzer
 
-Use a full `dumptruckman/ouch4ts` repository checkout. The bundled skill also
-requires that checkout. A copied skill directory has no analyzer source or build
-configuration.
+Run commands from the package you want to analyze with Node 22 or newer.
+If the project or its workspace already provides `ouch4ts`, use that version.
+For an npm project with its own installation, check the binary with
+`./node_modules/.bin/ouch4ts --version`. For a shared install, use the
+workspace binary from the selected package directory.
 
-1. From the checkout root, select the development Node version with nvm:
+If you want to add the analyzer to the project, use its package manager to
+install `ouch4ts` as a dev dependency of the selected package. For npm:
 
-   ```bash
-   nvm use
-   ```
+```bash
+npm install --save-dev ouch4ts
+```
 
-2. Install dependencies with lifecycle scripts disabled:
+If the project already declares the dependency, restore it with the project's
+normal install. The examples below use the project-local npm binary.
 
-   ```bash
-   npm ci --ignore-scripts
-   ```
-
-3. Build the analyzer:
-
-   ```bash
-   npm run build
-   ```
-
-The executable is `dist/cli.js`. Replace `/absolute/path/to/ouch4ts` in the
-examples below with your checkout path.
+For a one-off run, replace `./node_modules/.bin/ouch4ts` in the examples with
+`npx --yes ouch4ts@latest`. npm can download the stable release into its cache.
+This path needs no project dependency or script. Check the available options with
+`--help`.
 
 ## Generate a current report
 
 Install the target project's dependencies and configure its coverage command to
 emit LCOV for original sources. See the
-[coverage prerequisites](../skills/ouch4ts/references/coverage.md) for Vitest,
+[coverage prerequisites](coverage.md) for Vitest,
 Jest, and c8 settings.
 
 From the target project directory, run the analyzer:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js
+./node_modules/.bin/ouch4ts
 ```
 
 The default command runs the project's `test:coverage` script with its detected
@@ -50,7 +46,7 @@ complete result is saved to `.metrics/ouch.json`.
 If your coverage script has another name, pass its complete shell command:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js \
+./node_modules/.bin/ouch4ts \
 	--coverage-command 'yarn run coverage' --lcov coverage/lcov.info
 ```
 
@@ -61,11 +57,11 @@ project's dependencies or edit its configuration.
 
 ## Select a project and its sources
 
-To analyze a project from another directory, pass `--project`. To replace the
-default `src` root, pass one or more `--source-root` options:
+To analyze `packages/app` from the repository root, pass `--project packages/app`.
+This example uses the binary installed in that package and selects two source roots.
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js \
+./packages/app/node_modules/.bin/ouch4ts \
 	--project packages/app --source-root lib --source-root services
 ```
 
@@ -75,7 +71,7 @@ workspace projects.
 To exclude generated sources, quote each glob so the shell does not expand it:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js \
+./node_modules/.bin/ouch4ts \
 	--exclude '**/generated/**' --exclude '**/*.generated.*'
 ```
 
@@ -84,7 +80,7 @@ node /absolute/path/to/ouch4ts/dist/cli.js \
 To skip coverage generation, pass `--use-existing-coverage`:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --use-existing-coverage
+./node_modules/.bin/ouch4ts --use-existing-coverage
 ```
 
 This option trusts the report's freshness. Regenerate coverage after source
@@ -96,7 +92,7 @@ with that runtime first, then run the analyzer with Node 22 or newer.
 To display only paths containing `orders` or `billing`, pass those fragments:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js orders billing
+./node_modules/.bin/ouch4ts orders billing
 ```
 
 Matching is case-sensitive. Filters narrow stdout. The saved report still contains
@@ -105,7 +101,7 @@ all configured sources.
 To write the selected rows as JSON, pass `--format json`:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --use-existing-coverage --format json
+./node_modules/.bin/ouch4ts --use-existing-coverage --format json
 ```
 
 ## Show current scores for changed functions
@@ -113,7 +109,7 @@ node /absolute/path/to/ouch4ts/dist/cli.js --use-existing-coverage --format json
 Use the PR's target branch or another local Git reference:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --since origin/main
+./node_modules/.bin/ouch4ts --since origin/main
 ```
 
 `--since` selects functions touched since the merge base, including staged and
@@ -135,7 +131,7 @@ explicit setup command.
 Run the comparison against the PR's target reference:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --compare origin/main
+./node_modules/.bin/ouch4ts --compare origin/main
 ```
 
 The analyzer scores the merge base and committed `HEAD` in temporary detached
@@ -145,7 +141,7 @@ disabled, then generates coverage. Local source edits are excluded.
 If the defaults do not fit either revision, pass commands that work for both:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --compare origin/main \
+./node_modules/.bin/ouch4ts --compare origin/main \
 	--setup-command 'pnpm install --frozen-lockfile --ignore-scripts && pnpm run build' \
 	--coverage-command 'pnpm run coverage'
 ```
@@ -154,39 +150,21 @@ To regenerate cached reports after environment changes or a nondeterministic tes
 run, pass `--refresh`:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --compare origin/main --refresh
+./node_modules/.bin/ouch4ts --compare origin/main --refresh
 ```
 
 Results are saved to `.metrics/ouch-comparison.json`. See
-[commit comparisons](../skills/ouch4ts/references/comparison.md) for setup
+[commit comparisons](comparison.md) for setup
 commands, cache rules, and function matching.
 
 ## Install the agent skill
 
-After building the analyzer, link the checkout's skill directory into your
-agent's skill location. For Codex using `~/.agents/skills`, run:
+Copy the complete [`skills/ouch4ts` directory](https://github.com/dumptruckman/ouch4ts/tree/main/skills/ouch4ts), including its
+license and references, into your agent's skill directory. For Codex, the
+destination is `~/.agents/skills/ouch4ts/`. The copy works independently of
+the analyzer repository. You can also link that directory from a checkout.
 
-```bash
-mkdir -p ~/.agents/skills
-ln -s /absolute/path/to/ouch4ts/skills/ouch4ts ~/.agents/skills/ouch4ts
-```
-
-Ask for a JavaScript or TypeScript OUCH report, or invoke `$ouch4ts`. The agent
-reuses the build and runtime dependencies when present. See
-[analyzer bootstrap](../skills/ouch4ts/references/bootstrap.md) for missing
-dependencies or builds and the [project write policy](../skills/ouch4ts/SKILL.md#project-writes)
-for the skill's limits.
-
-## Install the built checkout in a target project
-
-To add the analyzer as a local development dependency, run these commands from
-the target project:
-
-```bash
-npm install --save-dev /absolute/path/to/ouch4ts
-npx --no-install ouch4ts --use-existing-coverage
-```
-
-This installation changes the target project's manifest and lockfile. For repeated
-use, add `"metrics": "ouch4ts"` to its npm scripts, then run
-`npm run metrics -- --use-existing-coverage`.
+Invoke `$ouch4ts` with a question such as "How did this PR change maintenance
+hassle compared with its base?" The skill uses the selected project's analyzer
+when available. Otherwise it asks whether to add the dependency or run the
+published analyzer once. See the [skill's project write policy](https://github.com/dumptruckman/ouch4ts/blob/main/skills/ouch4ts/SKILL.md#project-writes).

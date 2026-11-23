@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vitest";
+import packageManifest from "../package.json" with { type: "json" };
 import { verifyRegistryArtifact } from "../scripts/release/publication.ts";
 import type { Release } from "../scripts/release/github.ts";
 import { recordSchema } from "../scripts/release/state.ts";
@@ -22,7 +23,8 @@ async function fixture() {
   git("config", "user.name", "Test");
   git("config", "user.email", "test@example.com");
   git("config", "commit.gpgsign", "false");
-  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "ouch4ts", version: "0.1.0", license: "MIT", type: "module", files: ["dist"], scripts: { build: "node build.mjs" } }));
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "ouch4ts", version: "0.1.0", license: "MIT", type: "module", files: packageManifest.files, scripts: { build: "node build.mjs" } }));
+  await cp(path.resolve("docs"), path.join(root, "docs"), { recursive: true });
   await writeFile(path.join(root, "README.md"), "# Test package\n");
   await writeFile(path.join(root, "LICENSE"), "MIT\n");
   await mkdir(path.join(root, ".changeset"));

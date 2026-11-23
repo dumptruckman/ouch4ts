@@ -23,6 +23,7 @@ test("help works without source files or a coverage setup", async () => {
   expect(result.status, result.stderr).toBe(0);
   expect(result.stdout).toContain("Usage: ouch4ts");
   expect(result.stdout).toContain("--use-existing-coverage");
+  expect(result.stdout).toContain(join(root, "docs/cli.md"));
   expect((await run(cwd, "--help")).stdout).toBe(result.stdout.trimEnd());
   expect(existsSync(join(cwd, ".metrics"))).toBe(false);
 });

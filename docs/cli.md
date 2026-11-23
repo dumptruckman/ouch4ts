@@ -6,9 +6,9 @@ The CLI analyzes one JavaScript or TypeScript project per invocation:
 ouch4ts [options] [path-fragment ...]
 ```
 
-A built checkout exposes the CLI through `node /absolute/path/to/ouch4ts/dist/cli.js`.
 An installed package exposes `ouch4ts` through npm scripts, npm exec, npx, or a
 global installation. `--help` and `--version` require no target project setup.
+`--help` prints the absolute path to this reference in the running package.
 
 ## Options
 
@@ -86,14 +86,14 @@ The default source root is `src`. Discovery includes `.js`, `.jsx`, `.mjs`,
 `.cjs`, `.ts`, `.tsx`, `.mts`, and `.cts`. Tests, TypeScript declarations, and
 common build directories are excluded. JavaScript projects need no TypeScript
 configuration or dependency. The
-[source selection rules](../skills/ouch4ts/references/measurement.md#source-discovery-and-cyclomatic-complexity)
-define exclusions and glob matching.
+[source selection rules](measurement.md#source-discovery-and-cyclomatic-complexity)
+list the files and directories skipped by default.
 
 Package-manager detection uses the nearest `package.json` with `packageManager`
 metadata or a recognized lockfile. Metadata takes precedence over lockfiles in
 the same directory. The search stops at the Git root or filesystem root and
 defaults to npm when no hint exists. The
-[coverage command rules](../skills/ouch4ts/references/coverage.md#choose-a-command)
+[coverage command rules](coverage.md#choose-a-command)
 cover ambiguous lockfiles and overrides.
 
 Fresh analysis requires the coverage command to succeed and update LCOV. The
@@ -104,8 +104,24 @@ requires valid LCOV.
 
 LCOV paths identify original sources, relative to the project or absolute within
 the same checkout. Paths to compiled output can leave original-source coverage
-unknown. The [coverage prerequisites](../skills/ouch4ts/references/coverage.md)
+unknown. The [coverage prerequisites](coverage.md)
 cover runner settings and source maps.
+
+### Exclusion globs
+
+Repeated `--exclude '<glob>'` options add exclusions. Patterns match
+project-relative paths using `/` separators, regardless of the source roots.
+`**/generated/**` skips generated directories.
+`**/*.generated.{js,ts}` skips matching filenames.
+
+Matching includes hidden files and directories and is case-sensitive. A leading
+`!` is literal and does not re-include files. Matched directories are pruned.
+Matched files are skipped before reading or parsing and appear in neither the
+table nor saved metrics.
+
+Exclusions apply to normal reports, `--since`, and both revisions of `--compare`.
+Shell examples quote patterns to prevent shell expansion. Coverage commands use
+their own inclusion and exclusion settings.
 
 ## Current reports
 
@@ -153,7 +169,7 @@ coverage is unknown and sort by descending cognitive complexity, then path.
 
 File CC uses different syntax rules from function CC. File cognitive complexity
 includes module code and counts nested functions once. The
-[measurement conventions](../skills/ouch4ts/references/measurement.md)
+[measurement conventions](measurement.md)
 define both counters and the score formulas.
 
 ### Changed-function selection
@@ -190,7 +206,7 @@ while saved comparisons retain all metric changes.
 File rows sort by descending cognitive delta. Function rows sort by descending
 OUCH delta. Test-only edits can change scores. Unknown coverage keeps coverage,
 CRAP, and OUCH deltas `null`. Added and removed entries have no numeric delta.
-The [comparison reference](../skills/ouch4ts/references/comparison.md) defines
+The [comparison reference](comparison.md) defines
 fields, cache behavior, and function matching.
 
 ## Stdout, stderr, and failures

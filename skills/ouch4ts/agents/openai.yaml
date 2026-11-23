@@ -1,4 +1,4 @@
 interface:
   display_name: "OUCH for JavaScript and TypeScript"
-  short_description: "Report JS/TS file complexity and function hassle"
-  default_prompt: "Use $ouch4ts to report the files with the highest cognitive complexity and the functions with the highest maintenance hassle in this JavaScript or TypeScript project."
+  short_description: "Find high-maintenance JS/TS code or compare PR scores"
+  default_prompt: "Use $ouch4ts to find the hardest functions to maintain in this project and explain what drives their scores."

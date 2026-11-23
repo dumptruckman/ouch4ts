@@ -19,7 +19,13 @@
   },
   "files": [
     "dist/**/*.js",
-    "dist/**/*.d.ts"
+    "dist/**/*.d.ts",
+    "docs/analyze-project.md",
+    "docs/cli.md",
+    "docs/comparison.md",
+    "docs/coverage.md",
+    "docs/library.md",
+    "docs/measurement.md"
   ],
   "engines": {
     "node": ">=22"
