@@ -43,6 +43,6 @@ jobs:
             };
             await github.rest.repos.createRelease({
               ...context.repo, tag_name: tag, target_commitish: record.source,
-              name: `Release record ${record.source}`, draft: true,
+              name: `Release recovery for PR #${pr.number}: ${pr.title}`, draft: true,
               body: JSON.stringify(record, null, 2),
             });

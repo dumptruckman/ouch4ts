@@ -228,6 +228,9 @@ test("an ambiguous npm success recovers the original preview and never publishes
   expect(f.registry.version).toBe("0.1.1-preview.123");
   const record = f.releases.find((release) => release.tag_name === `record-${f.source}`);
   expect(JSON.parse(record?.body ?? "{}")).toMatchObject({ runId: "123", state: "preview verified" });
+  expect(record).toMatchObject({ draft: true, prerelease: true, name: "ouch4ts 0.1.1-preview.123 (PR #1)" });
+  expect(f.requests).not.toContain("POST /repos/test/repo/releases");
+  expect(f.requests).not.toContain("POST /repos/test/repo/git/refs");
   expect(record?.assets.map((asset) => asset.name).sort()).toEqual(["SHA256SUMS", "ouch4ts.tgz", "publication.json"]);
 }, 20000);
 
@@ -280,7 +283,7 @@ test("verification retries an interrupted tarball download", async () => {
 
 test("maintenance previews use their own channel and preserve newer main channels", async () => {
   const f = await fixture();
-  f.releases.push({ id: 3, name: "Newer main release", draft: false, tag_name: "v0.2.0", target_commitish: f.baseline, body: "Newer main line", assets: [] });
+  f.releases.push({ id: f.releases.length + 1, name: "Newer main release", draft: false, tag_name: "v0.2.0", target_commitish: f.baseline, body: "Newer main line", assets: [] });
   const record = f.releases.find((release) => release.tag_name === `record-${f.source}`);
   if (!record) throw new Error("Missing merge record");
   record.body = JSON.stringify({ schema: 1, source: f.source, branch: "maintenance/0.1", state: "recorded", pr: f.pr });
@@ -324,7 +327,7 @@ async function stableFixture() {
   await writeFile(path.join(f.root, "package-lock.json"), JSON.stringify({ name: "ouch4ts", version: "0.1.1", lockfileVersion: 3, packages: { "": { name: "ouch4ts", version: "0.1.1" } } }));
   f.git("add", "package.json", "package-lock.json", ".release/plan.json"); f.git("commit", "-m", "Release proposal");
   const stableSource = f.git("rev-parse", "HEAD");
-  f.releases.push({ id: 3, name: "Stable record", draft: true, tag_name: `record-${stableSource}`, target_commitish: stableSource, assets: [], body: JSON.stringify({ schema: 1, source: stableSource, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, title: "Release ouch4ts", head: "changeset-release/main", author: "github-actions[bot]" } }) });
+  f.releases.push({ id: f.releases.length + 1, name: "Stable record", draft: true, tag_name: `record-${stableSource}`, target_commitish: stableSource, assets: [], body: JSON.stringify({ schema: 1, source: stableSource, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, title: "Release ouch4ts", head: "changeset-release/main", author: "github-actions[bot]" } }) });
   await writeFile(f.eventFile, JSON.stringify({ before: f.source, after: stableSource }));
   const env = { ...f.publisherEnv, GITHUB_SHA: stableSource, GITHUB_RUN_ID: "124" };
   return { f, record, stableSource, env };
@@ -339,7 +342,7 @@ test("stable publication waits for latest to become visible after one tag update
   expect(result.stderr).toContain("Confirmed npm latest=0.1.1");
   expect(f.requests.filter(request => request === "POST /npm/tag")).toHaveLength(1);
   expect(f.registry.publishCount).toBe(2); // One preview and one stable publication.
-  expect(f.releases.find(release => release.tag_name === "v0.1.1")?.draft).toBe(false);
+  expect(f.releases.find(release => release.tag_name === "v0.1.1")).toMatchObject({ draft: false, prerelease: false, make_latest: "true" });
 }, 20_000);
 
 test("stable recovery finishes GitHub after npm success without changing version or rewinding latest", async () => {
@@ -353,13 +356,14 @@ test("stable recovery finishes GitHub after npm success without changing version
   expect(f.registry.publishCount).toBe(2);
   expect(f.registry.version).toBe("0.1.1");
   f.registry.tags.latest = "0.2.0";
+  f.releases.push({ id: f.releases.length + 1, name: "Newer stable", tag_name: "v0.2.0", draft: false, target_commitish: f.baseline, body: "", assets: [] });
   f.registry.failFinalization = false;
   const recovered = await f.run("publish", { ...env, GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_RUN_ID: "999" });
   expect(recovered.stderr).toBe(""); expect(recovered.code).toBe(0);
   expect(f.registry.publishCount).toBe(2);
   expect(f.registry.tags.latest).toBe("0.2.0");
   const stable = f.releases.find((release) => release.tag_name === "v0.1.1");
-  expect(stable?.draft).toBe(false);
+  expect(stable).toMatchObject({ draft: false, prerelease: false, make_latest: "false" });
   expect(stable?.body).toContain(stableSource);
   expect(stable?.body).toContain("A change");
   expect(JSON.parse(f.releases.find((release) => release.tag_name === `record-${stableSource}`)?.body ?? "{}")).toMatchObject({ state: "github complete", runId: "124", kind: "stable" });
@@ -402,7 +406,7 @@ test("an out-of-order run refuses to skip an unfinished predecessor", async () =
   await writeFile(path.join(f.root, "change"), "two");
   f.git("add", "change"); f.git("commit", "-m", "Second change");
   const next = f.git("rev-parse", "HEAD");
-  f.releases.push({ id: 3, tag_name: `record-${next}`, name: "Second record", draft: true, target_commitish: next, body: JSON.stringify({ schema: 1, source: next, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, labels: ["release:minor"] } }), assets: [] });
+  f.releases.push({ id: f.releases.length + 1, tag_name: `record-${next}`, name: "Second record", draft: true, target_commitish: next, body: JSON.stringify({ schema: 1, source: next, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, labels: ["release:minor"] } }), assets: [] });
   await writeFile(f.eventFile, JSON.stringify({ before: f.source, after: next }));
   const result = await f.run("plan", { GITHUB_SHA: next });
   expect(result.code).toBe(1);
@@ -422,7 +426,7 @@ test.each([
   await writeFile(path.join(f.root, "change"), "two");
   f.git("add", "change"); f.git("commit", "-m", "Second change");
   const next = f.git("rev-parse", "HEAD");
-  f.releases.push({ id: 3, tag_name: `record-${next}`, name: "Second record", draft: true, target_commitish: next, body: JSON.stringify({ schema: 1, source: next, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, labels: [label] } }), assets: [] });
+  f.releases.push({ id: f.releases.length + 1, tag_name: `record-${next}`, name: "Second record", draft: true, target_commitish: next, body: JSON.stringify({ schema: 1, source: next, branch: "main", state: "recorded", pr: { ...f.pr, number: 2, labels: [label] } }), assets: [] });
   await writeFile(f.eventFile, JSON.stringify({ before: f.source, after: next }));
   const result = await f.run("prepare", { GITHUB_SHA: next });
   expect(result.stderr).toBe("");
