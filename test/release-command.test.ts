@@ -45,7 +45,21 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
     { id: 2, tag_name: `record-${source}`, name: "Record", draft: true, target_commitish: source, body: JSON.stringify({ schema: 1, source, branch: "main", state: "recorded", pr }), assets: [] },
   ];
   const requests: string[] = [];
-  const registry = { value: {} as unknown, status: 404, version: "0.1.1", tarball: Buffer.alloc(0), provenanceDigest: "", tags: { latest: "0.1.0" } as Record<string, string>, publishCount: 0, ambiguousPublish: false, failFinalization: false, hiddenReads: 0 };
+  const registry = {
+    value: {} as unknown,
+    status: 404,
+    version: "0.1.1",
+    tarball: Buffer.alloc(0),
+    provenanceDigest: "",
+    tags: { latest: "0.1.0" } as Record<string, string>,
+    publishCount: 0,
+    ambiguousPublish: false,
+    failFinalization: false,
+    visibleAt: 0,
+    scanDurationMs: 0,
+    hideProvenanceOnce: false,
+    interruptTarballOnce: false,
+  };
   const assets = new Map<number, Buffer>();
   const refs = new Map<string, string>();
   const pulls = new Map<number, unknown>();
@@ -62,15 +76,25 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
     res.setHeader("Content-Type", "application/json");
     if (req.url === `/ouch4ts/${registry.version}`) {
       res.statusCode = registry.status;
-      if (registry.hiddenReads > 0 && registry.publishCount > 0) {
-        registry.hiddenReads--;
-        res.statusCode = 404;
+      if (Date.now() < registry.visibleAt) res.statusCode = 404;
+      if (registry.hideProvenanceOnce) {
+        registry.hideProvenanceOnce = false;
+        const integrity = `sha512-${createHash("sha512").update(registry.tarball).digest("base64")}`;
+        res.end(JSON.stringify({ version: registry.version, dist: { integrity } }));
+        return;
       }
       res.end(JSON.stringify(registry.value));
       return;
     }
     if (req.url === "/-/package/ouch4ts/dist-tags") { res.end(JSON.stringify(registry.tags)); return; }
-    if (req.url === "/tarball") { res.end(registry.tarball); return; }
+    if (req.url === "/tarball") {
+      if (registry.interruptTarballOnce) {
+        registry.interruptTarballOnce = false;
+        res.writeHead(200, { "Content-Length": registry.tarball.length });
+        res.write(registry.tarball.subarray(0, 1), () => res.destroy());
+      } else res.end(registry.tarball);
+      return;
+    }
     if (req.url === "/attestations") {
       const publication = [...releases].flatMap((release) => release.assets).find((asset) => asset.name === "publication.json" && JSON.parse(assets.get(asset.id)?.toString() ?? "{}").version === registry.version);
       const source = publication ? JSON.parse(assets.get(publication.id)?.toString() ?? "{}").source : "";
@@ -81,6 +105,7 @@ writeFileSync('dist/index.d.ts', 'export declare function analyze(): unknown[];'
       registry.tarball = await bodyBytes(req); registry.version = String(req.headers["x-version"]);
       registry.provenanceDigest = createHash("sha512").update(registry.tarball).digest("hex");
       registry.publishCount++; registry.status = 200;
+      registry.visibleAt = Date.now() + registry.scanDurationMs;
       registry.value = { version: registry.version, dist: { integrity: `sha512-${createHash("sha512").update(registry.tarball).digest("base64")}`, tarball: `${baseUrl}/tarball`, attestations: { url: `${baseUrl}/attestations` } } };
       registry.tags[String(req.headers["x-channel"])] = registry.version;
       res.statusCode = registry.ambiguousPublish ? 500 : 200; res.end("{}"); return;
@@ -181,12 +206,11 @@ test("the release command plans an exact source from a frozen merge record", asy
 test("an ambiguous npm success recovers the original preview and never publishes twice", async () => {
   const f = await fixture();
   f.registry.ambiguousPublish = true;
-  f.registry.hiddenReads = 1;
   const first = await f.run("publish", f.publisherEnv);
   expect(first.code, first.stderr).toBe(0);
-  expect(first.stderr).toContain("Waiting for npm to verify ouch4ts@0.1.1-preview.123");
   expect(f.registry.version).toBe("0.1.1-preview.123");
   expect(f.registry.publishCount).toBe(1);
+  f.registry.hideProvenanceOnce = true;
   const retry = await f.run("publish", { ...f.publisherEnv, GITHUB_RUN_ID: "999" });
   expect(retry.code, retry.stderr).toBe(0);
   expect(f.registry.publishCount).toBe(1);
@@ -218,7 +242,17 @@ test("a registry outage before publication preserves the original artifact for r
   expect(f.registry.tarball.equals(bytes)).toBe(true);
 }, 20000);
 
-test("registry verification waits for a submitted package to become visible", async () => {
+test("a successful submit outlasts npm's scan and verifies the original preview", async () => {
+  const f = await fixture();
+  f.registry.scanDurationMs = 16_000;
+  const result = await f.run("publish", f.publisherEnv);
+  expect(result.code, result.stderr).toBe(0);
+  expect(result.stderr).toContain("Waiting for npm to verify ouch4ts@0.1.1-preview.123");
+  expect(f.registry.publishCount).toBe(1);
+  expect(f.registry.tags.preview).toBe("0.1.1-preview.123");
+}, 75_000);
+
+test("verification retries an interrupted tarball download", async () => {
   const f = await fixture();
   const result = await f.run("publish", f.publisherEnv);
   expect(result.code, result.stderr).toBe(0);
@@ -229,7 +263,7 @@ test("registry verification waits for a submitted package to become visible", as
     version: f.registry.version,
     integrity: `sha512-${createHash("sha512").update(f.registry.tarball).digest("base64")}`,
   };
-  f.registry.hiddenReads = 6;
+  f.registry.interruptTarballOnce = true;
   expect(await verifyRegistryArtifact(input, { timeoutMs: 2000, intervalMs: 10 })).toBe(true);
 });
 

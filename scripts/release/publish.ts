@@ -8,7 +8,7 @@ import semver from "semver";
 import { z } from "zod";
 import { GitHubError, releaseSchema, type GitHub, type Release } from "./github.ts";
 import { minorLine, releaseLabel, releaseNotes } from "./plan.ts";
-import { canAdvanceChannel, checksums, packArtifact, publicationSchema, registryTags, verifyRegistryArtifact, type Publication } from "./publication.ts";
+import { canAdvanceChannel, checksums, packArtifact, publicationSchema, readMatchingManifest, registryTags, verifyRegistryArtifact, type Publication } from "./publication.ts";
 import { loadRun, type runContext } from "./state.ts";
 
 const exec = promisify(execFile);
@@ -47,19 +47,25 @@ async function retainArtifact(input: { github: GitHub; release: Release; version
   return { release, publication, bytes: saved };
 }
 
+async function submitTarball(bytes: Buffer, channel: string, registry: string) {
+  const temp = mkdtempSync(path.join(tmpdir(), "ouch-publish-"));
+  try {
+    const archive = path.join(temp, "ouch4ts.tgz");
+    writeFileSync(archive, bytes);
+    await exec("npm", ["publish", archive, "--ignore-scripts", "--access", "public", "--provenance", "--tag", channel, "--registry", registry]);
+  } finally { rmSync(temp, { recursive: true, force: true }); }
+}
+
 async function publishOrVerify(input: { publication: Publication; bytes: Buffer; repository: string }): Promise<void> {
   const registry = registryUrl();
   const verifyInput = { registry, repository: input.repository, ...input.publication };
-  if (await verifyRegistryArtifact(verifyInput)) return;
-  const temp = mkdtempSync(path.join(tmpdir(), "ouch-publish-"));
+  const existing = await readMatchingManifest(verifyInput);
   let publishError: unknown;
-  try {
-    const archive = path.join(temp, "ouch4ts.tgz");
-    writeFileSync(archive, input.bytes);
+  if (!existing) {
     try {
-      await exec("npm", ["publish", archive, "--ignore-scripts", "--access", "public", "--provenance", "--tag", input.publication.channel, "--registry", registry]);
+      await submitTarball(input.bytes, input.publication.channel, registry);
     } catch (error) { publishError = error; }
-  } finally { rmSync(temp, { recursive: true, force: true }); }
+  }
   // A successful submission can take several minutes to clear npm's scan.
   const wait = publishError
     ? { timeoutMs: 15_000, intervalMs: 1_000 }

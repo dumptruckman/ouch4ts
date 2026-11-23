@@ -25,28 +25,36 @@ class RegistryNotReady extends Error {}
 
 async function readRegistry(url: string, signal: AbortSignal | null) {
   let response;
+  let bytes;
   try {
     response = await fetch(url, { signal });
+    bytes = Buffer.from(await response.arrayBuffer());
   } catch (error) {
     throw new RegistryNotReady("Cannot reach npm for verification", { cause: error });
   }
   if (response.status === 408 || response.status === 429 || response.status >= 500) {
     throw new RegistryNotReady(`npm registry verification failed: ${response.status}`);
   }
-  return response;
+  return { status: response.status, ok: response.ok, bytes };
+}
+
+export async function readMatchingManifest(input: RegistryArtifact, signal: AbortSignal | null = null) {
+  const response = await readRegistry(`${input.registry}/ouch4ts/${input.version}`, signal);
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error(`npm registry verification failed: ${response.status}`);
+  const manifest = z.object({ version: z.string(), dist: z.object({ integrity: z.string(), tarball: z.string().url().optional(), attestations: z.object({ url: z.string().url() }).optional() }) }).parse(JSON.parse(response.bytes.toString()));
+  if (manifest.version !== input.version || manifest.dist.integrity !== input.integrity) throw new Error(`npm ${input.version} already has different contents`);
+  return manifest;
 }
 
 async function verifyOnce(input: RegistryArtifact, signal: AbortSignal | null): Promise<boolean> {
-  const response = await readRegistry(`${input.registry}/ouch4ts/${input.version}`, signal);
-  if (response.status === 404) return false;
-  if (!response.ok) throw new Error(`npm registry verification failed: ${response.status}`);
-  const manifest = z.object({ version: z.string(), dist: z.object({ integrity: z.string(), tarball: z.string().url().optional(), attestations: z.object({ url: z.string().url() }).optional() }) }).parse(await response.json());
-  if (manifest.version !== input.version || manifest.dist.integrity !== input.integrity) throw new Error(`npm ${input.version} already has different contents`);
+  const manifest = await readMatchingManifest(input, signal);
+  if (!manifest) return false;
   if (!manifest.dist.attestations) throw new RegistryNotReady("npm provenance is not available yet");
   const attestationResponse = await readRegistry(manifest.dist.attestations.url, signal);
   if (attestationResponse.status === 404) throw new RegistryNotReady("npm provenance is not available yet");
   if (!attestationResponse.ok) throw new Error(`Cannot read npm provenance: ${attestationResponse.status}`);
-  const attestations = z.object({ attestations: z.array(z.object({ predicateType: z.string(), bundle: z.unknown() })) }).parse(await attestationResponse.json());
+  const attestations = z.object({ attestations: z.array(z.object({ predicateType: z.string(), bundle: z.unknown() })) }).parse(JSON.parse(attestationResponse.bytes.toString()));
   const attestation = attestations.attestations.find((entry) => entry.predicateType === "https://slsa.dev/provenance/v1");
   if (!attestation) throw new RegistryNotReady("npm SLSA provenance is missing");
   const serialized = z.object({ dsseEnvelope: z.object({ payload: z.string() }) }).parse(attestation.bundle);
@@ -69,7 +77,8 @@ async function verifyOnce(input: RegistryArtifact, signal: AbortSignal | null): 
   if (!manifest.dist.tarball) throw new RegistryNotReady("npm tarball URL is missing");
   const tarball = await readRegistry(manifest.dist.tarball, signal);
   if (tarball.status === 404) throw new RegistryNotReady("npm tarball is not available yet");
-  if (!tarball.ok || checksums(Buffer.from(await tarball.arrayBuffer())).integrity !== input.integrity) throw new Error("npm tarball bytes differ from the retained artifact");
+  if (!tarball.ok) throw new Error(`Cannot read npm tarball: ${tarball.status}`);
+  if (checksums(tarball.bytes).integrity !== input.integrity) throw new Error("npm tarball bytes differ from the retained artifact");
   return true;
 }
 
