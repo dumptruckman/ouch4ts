@@ -82,25 +82,35 @@ async function verifyOnce(input: RegistryArtifact, signal: AbortSignal | null): 
   return true;
 }
 
-export async function verifyRegistryArtifact(input: RegistryArtifact, wait?: { timeoutMs: number; intervalMs: number }): Promise<boolean> {
-  if (!wait) return verifyOnce(input, null);
+type RegistryWait = { timeoutMs: number; intervalMs: number };
 
+/** Return the last reason verification was pending if the deadline expires. */
+async function waitForRegistry(action: string, wait: RegistryWait, pendingReason: (signal: AbortSignal) => Promise<string | undefined>) {
   const deadline = Date.now() + wait.timeoutMs;
   const signal = AbortSignal.timeout(wait.timeoutMs);
+  let reason = "no response before the deadline";
   while (Date.now() < deadline && !signal.aborted) {
-    let reason = "version is not visible yet";
     try {
-      if (await verifyOnce(input, signal)) return true;
+      const pending = await pendingReason(signal);
+      if (pending === undefined) return;
+      reason = pending;
     } catch (error) {
       if (signal.aborted) break;
       if (!(error instanceof RegistryNotReady)) throw error;
       reason = error.message;
     }
     const remaining = Math.max(0, deadline - Date.now());
-    console.error(`Waiting for npm to verify ouch4ts@${input.version} (${Math.ceil(remaining / 1000)}s remaining): ${reason}`);
+    console.error(`Waiting for npm to ${action} (${Math.ceil(remaining / 1000)}s remaining): ${reason}`);
     await delay(Math.min(remaining, wait.intervalMs));
   }
-  return false;
+  return reason;
+}
+
+export async function verifyRegistryArtifact(input: RegistryArtifact, wait?: RegistryWait): Promise<boolean> {
+  if (!wait) return verifyOnce(input, null);
+  const pending = await waitForRegistry(`verify ouch4ts@${input.version}`, wait, async signal =>
+    await verifyOnce(input, signal) ? undefined : "version is not visible yet");
+  return pending === undefined;
 }
 
 function verifyPackageContents(entries: string[]) {
@@ -146,10 +156,21 @@ export function packArtifact(version: string): Buffer {
   }
 }
 
-export async function registryTags(registry: string): Promise<Record<string, string>> {
-  const response = await fetch(`${registry}/-/package/ouch4ts/dist-tags`);
+export async function registryTags(registry: string, signal: AbortSignal | null = null): Promise<Record<string, string>> {
+  const response = await readRegistry(`${registry}/-/package/ouch4ts/dist-tags`, signal);
   if (!response.ok) throw new Error(`Cannot read npm channels: ${response.status}`);
-  return z.record(z.string(), z.string()).parse(await response.json());
+  return z.record(z.string(), z.string()).parse(JSON.parse(response.bytes.toString()));
+}
+
+type RegistryChannel = Pick<Publication, "channel" | "version"> & { registry: string };
+
+export async function confirmChannel({ registry, channel, version }: RegistryChannel, wait: RegistryWait = { timeoutMs: 5 * 60_000, intervalMs: 5_000 }) {
+  const pending = await waitForRegistry(`confirm ${channel}=${version}`, wait, async signal => {
+    const observed = (await registryTags(registry, signal))[channel];
+    return observed === version ? undefined : `observed ${observed ?? "<unset>"}`;
+  });
+  if (pending !== undefined) throw new Error(`Timed out confirming npm ${channel}=${version} (${pending}); recover the original publication`);
+  console.error(`Confirmed npm ${channel}=${version}`);
 }
 
 export function canAdvanceChannel(current: string | undefined, next: string, channel: string): boolean {
