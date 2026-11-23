@@ -1,0 +1,37 @@
+{
+  "branch": "main",
+  "baseline": {
+    "tag": "v0.1.0",
+    "source": "dc67753293294831d57ebfb4cf751ed71e242da2",
+    "version": "0.1.0"
+  },
+  "source": "07912c566d02b9a914b2524d7910d48fd6e451a8",
+  "changes": [
+    {
+      "number": 16,
+      "title": "Show how to list CLI options with npx",
+      "body": "## Summary\n\nThe npm README describes the CLI but gives readers no command to try. The introduction now includes this example.\n\n```sh\nnpx ouch4ts --help\n```\n\n## Evidence\n\nRan the command in an empty directory with a fresh npm cache. It fetched `ouch4ts@0.1.0`, printed the CLI options, and exited with status 0.\n\n## Merge danger\n\nThe change is one sentence in the README. Merging with `release:patch` triggers the first automated npm preview.\n",
+      "url": "https://github.com/dumptruckman/ouch4ts/pull/16",
+      "labels": [
+        "release:patch"
+      ],
+      "head": "jwood/readme-cli-help",
+      "repository": "dumptruckman/ouch4ts",
+      "author": "dumptruckman"
+    },
+    {
+      "number": 20,
+      "title": "Preserve release tags and wait for npm verification",
+      "body": "## Summary\n\nThe first npm preview needed manual recovery twice. GitHub renamed the draft that held the tarball, and the release job timed out while npm was making the version available.\n\n```text\nUpdate GitHub draft → send its original tag name with the progress update\nnpm accepts package → wait up to 20 minutes for the matching tarball and provenance\n```\n\nA retry that finds matching package metadata verifies the existing publication. Conflicting bytes or provenance stop the run immediately.\n\n## Evidence\n\nThe release-command tests reproduce GitHub assigning an `untagged-*` name, an npm scan that exceeds the old 15-second window, recovery before provenance is available, and a connection that drops mid-download. The tests also check the deadline and rejection of a substituted source or tarball.\n\n## Merge danger\n\nMerging this `release:patch` PR triggers a public npm preview and refreshes [Release ouch4ts](https://github.com/dumptruckman/ouch4ts/pull/19). Merging that separate PR publishes stable `0.1.1`.\n\nFixes #17 (Preserve draft release tag names when recording progress).\nFixes #18 (Allow time for npm to expose a published version).\n",
+      "url": "https://github.com/dumptruckman/ouch4ts/pull/20",
+      "labels": [
+        "release:patch"
+      ],
+      "head": "jwood/fix-release-recovery",
+      "repository": "dumptruckman/ouch4ts",
+      "author": "dumptruckman"
+    }
+  ],
+  "bump": "patch",
+  "version": "0.1.1"
+}
