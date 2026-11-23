@@ -58,7 +58,9 @@ cognitive complexity would change that rule.
 A patch can correct a calculation that disagrees with a published rule. The
 same source and coverage can then produce a different score after an upgrade.
 Release notes for scoring fixes identify the affected metrics and the cases
-where scores can change.
+where scores can change. The top-level `analyzerVersion` field in the CLI's
+saved reports and JSON stdout identifies the release that generated the report.
+Older reports can lack this field.
 
 During `0.x`, breaking changes require a minor release. Patch releases preserve
 compatibility.

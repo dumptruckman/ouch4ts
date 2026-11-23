@@ -139,7 +139,9 @@ Function  File             CC  Cog   Cov%  CRAP  OUCH
 price     src/orders.ts:1   2    1  50.0%   2.5   3.5
 ```
 
-Current reports have the JSON shape `{ "entries": [...], "files": [...] }`.
+Current JSON reports contain `analyzerVersion`, function scores in `entries`,
+and file metrics in `files`. The `analyzerVersion` string matches the generating
+CLI's `ouch4ts --version` output.
 Successful analysis atomically replaces `<output-dir>/ouch.json`.
 
 ### Function fields
@@ -198,10 +200,12 @@ including through symlinks. Configuration resolves once from the launching
 checkout and applies to both revisions. Local config edits can affect both
 measurements. Local source edits are excluded.
 
-The saved report is `<output-dir>/ouch-comparison.json`. It contains `base` and
-`head` commit hashes, function comparisons in `entries`, and file comparisons in
-`files`. It preserves the ordinary `ouch.json` report. Path filters narrow stdout,
-while saved comparisons retain all metric changes.
+The saved report is `<output-dir>/ouch-comparison.json`. Its `analyzerVersion`
+identifies the CLI that generated the comparison, including on a cache hit.
+The report contains `base` and `head` commit hashes, function comparisons in
+`entries`, and file comparisons in `files`. It preserves the ordinary `ouch.json`
+report. Path filters narrow stdout, while saved comparisons retain all metric
+changes.
 
 File rows sort by descending cognitive delta. Function rows sort by descending
 OUCH delta. Test-only edits can change scores. Unknown coverage keeps coverage,

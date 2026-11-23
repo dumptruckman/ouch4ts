@@ -141,6 +141,7 @@ fields:
 
 | Field | Contents |
 | --- | --- |
+| `analyzerVersion` | Version string of the `ouch4ts` package that generated the comparison |
 | `base`, `head` | Commit hashes |
 | `entries` | Function comparisons with `name`, `file`, `status`, full `base` and `head` metrics, and `delta` |
 | `files` | File comparisons with `file`, `status`, `base`, `head`, and `delta` |
