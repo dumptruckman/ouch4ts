@@ -33,6 +33,11 @@ export function runContext() {
   return { env, github: new GitHub({ repository: env.GITHUB_REPOSITORY, token: env.GH_TOKEN, api: env.GITHUB_API_URL }) };
 }
 
+export function publishedStableVersions(releases: Release[]): string[] {
+  return releases.filter(release => !release.draft && !release.prerelease && /^v\d+\.\d+\.\d+$/.test(release.tag_name))
+    .map(release => stableVersionSchema.parse(release.tag_name.slice(1)));
+}
+
 export function recordsFrom(releases: Release[]) {
   return releases.filter((release) => release.tag_name.startsWith("record-")).map((release) => {
     const record = recordSchema.parse(JSON.parse(release.body ?? "null"));
@@ -91,8 +96,7 @@ export async function loadRun(context: ReturnType<typeof runContext>) {
     cursor = record.before;
   }
   const kind = isReleaseProposal(current.record.pr, env.RELEASE_BRANCH, env.GITHUB_REPOSITORY) ? "stable" : "ordinary";
-  const published = releases.filter((release) => !release.draft && /^v\d+\.\d+\.\d+$/.test(release.tag_name)).map((release) => stableVersionSchema.parse(release.tag_name.slice(1)));
-  assertReleaseLine({ branch: env.RELEASE_BRANCH, baseline: baseline.version, published });
+  assertReleaseLine({ branch: env.RELEASE_BRANCH, baseline: baseline.version, published: publishedStableVersions(releases) });
   const changes = kind === "ordinary" ? [...pending, current.record.pr] : pending;
   const computed = planRelease({ branch: env.RELEASE_BRANCH, baseline, source: kind === "stable" ? identity.before : env.GITHUB_SHA, changes });
   let plan = computed;

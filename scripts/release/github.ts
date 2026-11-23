@@ -2,13 +2,13 @@ import { z } from "zod";
 
 export const assetSchema = z.object({ id: z.number(), name: z.string(), url: z.string(), browser_download_url: z.string() });
 export const releaseSchema = z.object({
-  id: z.number(), tag_name: z.string(), draft: z.boolean(), body: z.string().nullable(),
+  id: z.number(), tag_name: z.string(), draft: z.boolean(), prerelease: z.boolean().optional(), body: z.string().nullable(),
   target_commitish: z.string(), assets: z.array(assetSchema),
 });
 export type Release = z.infer<typeof releaseSchema>;
 type ReleaseUpdate = Pick<Release, "body"> & Partial<Pick<Release, "target_commitish" | "draft">> & {
   prerelease?: boolean;
-  make_latest?: "false";
+  make_latest?: "true" | "false";
 };
 
 export class GitHubError extends Error {

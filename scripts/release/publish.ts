@@ -9,7 +9,7 @@ import { z } from "zod";
 import { GitHubError, releaseSchema, type GitHub, type Release } from "./github.ts";
 import { minorLine, releaseLabel, releaseNotes } from "./plan.ts";
 import { canAdvanceChannel, checksums, confirmChannel, packArtifact, publicationSchema, readMatchingManifest, registryTags, verifyRegistryArtifact, type Publication } from "./publication.ts";
-import { loadRun, type runContext } from "./state.ts";
+import { loadRun, publishedStableVersions, type runContext } from "./state.ts";
 
 const exec = promisify(execFile);
 function registryUrl(): string {
@@ -44,7 +44,7 @@ async function retainArtifact(input: { github: GitHub; release: Release; version
   release = await refresh(input.github, release);
   const saved = await input.github.asset(release, "ouch4ts.tgz");
   if (!saved || checksums(saved).integrity !== publication.integrity) throw new Error("GitHub did not retain the exact tarball");
-  return { release, publication, bytes: saved };
+  return { publication, bytes: saved };
 }
 
 async function submitTarball(bytes: Buffer, channel: string, registry: string) {
@@ -85,7 +85,7 @@ async function moveChannels(publication: Publication): Promise<void> {
   }
 }
 
-async function finalizeStable(input: { github: GitHub; release: Release; publication: Publication; notes: string }): Promise<void> {
+async function finalizeRelease(input: { github: GitHub; release: Release; publication: Publication; prerelease: boolean; latest: boolean; notes: string }): Promise<void> {
   const tag = `v${input.publication.version}`;
   let exists = false;
   try {
@@ -95,7 +95,7 @@ async function finalizeStable(input: { github: GitHub; release: Release; publica
     exists = true;
   } catch (error) { if (!(error instanceof GitHubError && error.status === 404)) throw error; }
   if (!exists) await input.github.request("POST", "git/refs", { ref: `refs/tags/${tag}`, sha: input.publication.source });
-  await input.github.update(input.release, { draft: false, prerelease: false, make_latest: "false", body: input.notes, target_commitish: input.publication.source });
+  await input.github.update(input.release, { draft: false, prerelease: input.prerelease, make_latest: input.latest ? "true" : "false", body: input.notes, target_commitish: input.publication.source });
 }
 
 export async function publishRelease(context: ReturnType<typeof runContext>): Promise<void> {
@@ -125,17 +125,18 @@ export async function publishRelease(context: ReturnType<typeof runContext>): Pr
   const stable = active.kind === "stable";
   const version = stable ? plan.version : `${plan.version}-preview.${active.runId}`;
   const channel = stable ? `release-${minorLine(plan.version)}` : active.branch === "main" ? "preview" : `preview-${minorLine(plan.version)}`;
-  let release = run.release;
-  if (stable) {
-    release = run.releases.find((entry) => entry.tag_name === `v${version}`) ?? await github.create({ tag_name: `v${version}`, target_commitish: active.source, name: `ouch4ts ${version}`, draft: true, body: releaseNotes(plan, active.source, env.GITHUB_REPOSITORY) });
-  }
-  const retained = await retainArtifact({ github, release, version, source: active.source, runId: active.runId, channel });
+  const notes = releaseNotes(plan, active.source, env.GITHUB_REPOSITORY);
+  const release = run.releases.find(entry => entry.tag_name === `v${version}`) ?? await github.create({
+    tag_name: `v${version}`, target_commitish: active.source, name: `ouch4ts ${version}`, draft: true, prerelease: !stable, body: notes,
+  });
+  const retained = await retainArtifact({ github, release: stable ? release : run.release, version, source: active.source, runId: active.runId, channel });
   await github.update(run.release, { body: JSON.stringify({ ...active, state: "artifact verified" }, null, 2) });
   await publishOrVerify({ ...retained, repository: env.GITHUB_REPOSITORY });
   await github.update(run.release, { body: JSON.stringify({ ...active, state: "npm verified" }, null, 2) });
   await moveChannels(retained.publication);
+  const latest = stable && publishedStableVersions(run.releases).every(published => semver.lte(published, version));
+  await finalizeRelease({ github, release, publication: retained.publication, notes, prerelease: !stable, latest });
   if (stable) {
-    await finalizeStable({ github, release: retained.release, publication: retained.publication, notes: releaseNotes(plan, active.source, env.GITHUB_REPOSITORY) });
     await github.update(run.release, { body: JSON.stringify({ ...active, state: "github complete" }, null, 2) });
     outputs(active.branch, false);
   } else {
