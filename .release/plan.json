@@ -1,37 +1,25 @@
 {
   "branch": "main",
   "baseline": {
-    "tag": "v0.1.0",
-    "source": "dc67753293294831d57ebfb4cf751ed71e242da2",
-    "version": "0.1.0"
+    "tag": "v0.1.1",
+    "source": "19b9d8e57549e590666f4b783842ce497eafbe06",
+    "version": "0.1.1"
   },
-  "source": "07912c566d02b9a914b2524d7910d48fd6e451a8",
+  "source": "60208c8b1b5a971b9dbe537f71d8463fb7493f99",
   "changes": [
     {
-      "number": 16,
-      "title": "Show how to list CLI options with npx",
-      "body": "## Summary\n\nThe npm README describes the CLI but gives readers no command to try. The introduction now includes this example.\n\n```sh\nnpx ouch4ts --help\n```\n\n## Evidence\n\nRan the command in an empty directory with a fresh npm cache. It fetched `ouch4ts@0.1.0`, printed the CLI options, and exited with status 0.\n\n## Merge danger\n\nThe change is one sentence in the README. Merging with `release:patch` triggers the first automated npm preview.\n",
-      "url": "https://github.com/dumptruckman/ouch4ts/pull/16",
+      "number": 21,
+      "title": "Use the published analyzer in the skill and ship its guides",
+      "body": "## Summary\n\nA copied OUCH skill required a built checkout, and the npm package omitted the guides its README linked to. The skill now uses the published analyzer and can open the matching docs offline.\n\n```text\nProject or workspace has ouch4ts → use the installed version\nAnalyzer missing                 → ask before installing or running npx once\nNeed the full CLI reference     → open the local path printed by --help\n```\n\nThe release check requires all six analyzer guides in the tarball. The 0BSD skill stays separate from the MIT package. The repository instructions also direct agents to fetch origin and start new work on a branch based on origin/main.\n\n## Evidence\n\n- A workspace used its installed 0.1.0 with 0.1.1 already in npm's cache. A one-off report using existing coverage added only `.metrics/ouch.json`.\n- Installed the new tarball locally, in a workspace, and with offline `npx`. Each invocation found its CLI reference. All 17 relative links and anchors in the packaged docs resolved.\n- Typecheck, build, and all 371 tests passed. The release check rejected both a missing coverage guide and an unexpected contributor guide.\n\n## Merge danger\n\nMerging with `release:patch` triggers an npm preview. The separate rolling release PR controls stable publication.\n\nImplements [Switch the BSD0 skill to the published npm analyzer](https://github.com/dumptruckman/ouch4ts/issues/13).\n",
+      "url": "https://github.com/dumptruckman/ouch4ts/pull/21",
       "labels": [
         "release:patch"
       ],
-      "head": "jwood/readme-cli-help",
-      "repository": "dumptruckman/ouch4ts",
-      "author": "dumptruckman"
-    },
-    {
-      "number": 20,
-      "title": "Preserve release tags and wait for npm verification",
-      "body": "## Summary\n\nThe first npm preview needed manual recovery twice. GitHub renamed the draft that held the tarball, and the release job timed out while npm was making the version available.\n\n```text\nUpdate GitHub draft → send its original tag name with the progress update\nnpm accepts package → wait up to 20 minutes for the matching tarball and provenance\n```\n\nA retry that finds matching package metadata verifies the existing publication. Conflicting bytes or provenance stop the run immediately.\n\n## Evidence\n\nThe release-command tests reproduce GitHub assigning an `untagged-*` name, an npm scan that exceeds the old 15-second window, recovery before provenance is available, and a connection that drops mid-download. The tests also check the deadline and rejection of a substituted source or tarball.\n\n## Merge danger\n\nMerging this `release:patch` PR triggers a public npm preview and refreshes [Release ouch4ts](https://github.com/dumptruckman/ouch4ts/pull/19). Merging that separate PR publishes stable `0.1.1`.\n\nFixes #17 (Preserve draft release tag names when recording progress).\nFixes #18 (Allow time for npm to expose a published version).\n",
-      "url": "https://github.com/dumptruckman/ouch4ts/pull/20",
-      "labels": [
-        "release:patch"
-      ],
-      "head": "jwood/fix-release-recovery",
+      "head": "jwood/package-analyzer-docs",
       "repository": "dumptruckman/ouch4ts",
       "author": "dumptruckman"
     }
   ],
   "bump": "patch",
-  "version": "0.1.1"
+  "version": "0.1.2"
 }
