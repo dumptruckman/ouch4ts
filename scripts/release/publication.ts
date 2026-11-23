@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import semver from "semver";
 import { z } from "zod";
@@ -19,18 +20,43 @@ export function checksums(bytes: Buffer) {
   return { sha256: createHash("sha256").update(bytes).digest("hex"), integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}` };
 }
 
-export async function verifyRegistryArtifact(input: { registry: string; repository: string; version: string; source: string; integrity: string }): Promise<boolean> {
-  const response = await fetch(`${input.registry}/ouch4ts/${input.version}`);
-  if (response.status === 404) return false;
+type RegistryArtifact = Pick<Publication, "version" | "source" | "integrity"> & { registry: string; repository: string };
+class RegistryNotReady extends Error {}
+
+async function readRegistry(url: string, signal: AbortSignal | null) {
+  let response;
+  let bytes;
+  try {
+    response = await fetch(url, { signal });
+    bytes = Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    throw new RegistryNotReady("Cannot reach npm for verification", { cause: error });
+  }
+  if (response.status === 408 || response.status === 429 || response.status >= 500) {
+    throw new RegistryNotReady(`npm registry verification failed: ${response.status}`);
+  }
+  return { status: response.status, ok: response.ok, bytes };
+}
+
+export async function readMatchingManifest(input: RegistryArtifact, signal: AbortSignal | null = null) {
+  const response = await readRegistry(`${input.registry}/ouch4ts/${input.version}`, signal);
+  if (response.status === 404) return undefined;
   if (!response.ok) throw new Error(`npm registry verification failed: ${response.status}`);
-  const manifest = z.object({ version: z.string(), dist: z.object({ integrity: z.string(), tarball: z.string().url().optional(), attestations: z.object({ url: z.string().url() }).optional() }) }).parse(await response.json());
+  const manifest = z.object({ version: z.string(), dist: z.object({ integrity: z.string(), tarball: z.string().url().optional(), attestations: z.object({ url: z.string().url() }).optional() }) }).parse(JSON.parse(response.bytes.toString()));
   if (manifest.version !== input.version || manifest.dist.integrity !== input.integrity) throw new Error(`npm ${input.version} already has different contents`);
-  if (!manifest.dist.attestations) throw new Error("npm provenance is not available yet; retry this original run");
-  const attestationResponse = await fetch(manifest.dist.attestations.url);
+  return manifest;
+}
+
+async function verifyOnce(input: RegistryArtifact, signal: AbortSignal | null): Promise<boolean> {
+  const manifest = await readMatchingManifest(input, signal);
+  if (!manifest) return false;
+  if (!manifest.dist.attestations) throw new RegistryNotReady("npm provenance is not available yet");
+  const attestationResponse = await readRegistry(manifest.dist.attestations.url, signal);
+  if (attestationResponse.status === 404) throw new RegistryNotReady("npm provenance is not available yet");
   if (!attestationResponse.ok) throw new Error(`Cannot read npm provenance: ${attestationResponse.status}`);
-  const attestations = z.object({ attestations: z.array(z.object({ predicateType: z.string(), bundle: z.unknown() })) }).parse(await attestationResponse.json());
+  const attestations = z.object({ attestations: z.array(z.object({ predicateType: z.string(), bundle: z.unknown() })) }).parse(JSON.parse(attestationResponse.bytes.toString()));
   const attestation = attestations.attestations.find((entry) => entry.predicateType === "https://slsa.dev/provenance/v1");
-  if (!attestation) throw new Error("npm SLSA provenance is missing");
+  if (!attestation) throw new RegistryNotReady("npm SLSA provenance is missing");
   const serialized = z.object({ dsseEnvelope: z.object({ payload: z.string() }) }).parse(attestation.bundle);
   const payload = z.object({
     subject: z.array(z.object({ digest: z.object({ sha512: z.string() }) })),
@@ -48,10 +74,33 @@ export async function verifyRegistryArtifact(input: { registry: string; reposito
   const hasExpectedArtifact = payload.subject.length === 1 && payload.subject[0]?.digest.sha512 === expectedDigest;
   if (!hasExpectedWorkflow || !hasExpectedSource || !hasExpectedArtifact) throw new Error("npm provenance source, workflow, or artifact differs from the release plan");
   // npm validates attestations on publication. Bind the registry's statement to our retained source and bytes.
-  if (!manifest.dist.tarball) throw new Error("npm tarball URL is missing");
-  const tarball = await fetch(manifest.dist.tarball);
-  if (!tarball.ok || checksums(Buffer.from(await tarball.arrayBuffer())).integrity !== input.integrity) throw new Error("npm tarball bytes differ from the retained artifact");
+  if (!manifest.dist.tarball) throw new RegistryNotReady("npm tarball URL is missing");
+  const tarball = await readRegistry(manifest.dist.tarball, signal);
+  if (tarball.status === 404) throw new RegistryNotReady("npm tarball is not available yet");
+  if (!tarball.ok) throw new Error(`Cannot read npm tarball: ${tarball.status}`);
+  if (checksums(tarball.bytes).integrity !== input.integrity) throw new Error("npm tarball bytes differ from the retained artifact");
   return true;
+}
+
+export async function verifyRegistryArtifact(input: RegistryArtifact, wait?: { timeoutMs: number; intervalMs: number }): Promise<boolean> {
+  if (!wait) return verifyOnce(input, null);
+
+  const deadline = Date.now() + wait.timeoutMs;
+  const signal = AbortSignal.timeout(wait.timeoutMs);
+  while (Date.now() < deadline && !signal.aborted) {
+    let reason = "version is not visible yet";
+    try {
+      if (await verifyOnce(input, signal)) return true;
+    } catch (error) {
+      if (signal.aborted) break;
+      if (!(error instanceof RegistryNotReady)) throw error;
+      reason = error.message;
+    }
+    const remaining = Math.max(0, deadline - Date.now());
+    console.error(`Waiting for npm to verify ouch4ts@${input.version} (${Math.ceil(remaining / 1000)}s remaining): ${reason}`);
+    await delay(Math.min(remaining, wait.intervalMs));
+  }
+  return false;
 }
 
 export function packArtifact(version: string): Buffer {

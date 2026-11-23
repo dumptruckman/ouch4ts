@@ -6,6 +6,10 @@ export const releaseSchema = z.object({
   target_commitish: z.string(), assets: z.array(assetSchema),
 });
 export type Release = z.infer<typeof releaseSchema>;
+type ReleaseUpdate = Pick<Release, "body"> & Partial<Pick<Release, "target_commitish" | "draft">> & {
+  prerelease?: boolean;
+  make_latest?: "false";
+};
 
 export class GitHubError extends Error {
   readonly status: number;
@@ -41,8 +45,9 @@ export class GitHub {
     }
   }
 
-  async update(release: Release, body: unknown): Promise<Release> {
-    return releaseSchema.parse(await this.request("PATCH", `releases/${release.id}`, body));
+  async update(release: Release, changes: ReleaseUpdate): Promise<Release> {
+    // GitHub can replace a draft's tag with an untagged-* placeholder on PATCH.
+    return releaseSchema.parse(await this.request("PATCH", `releases/${release.id}`, { ...changes, tag_name: release.tag_name }));
   }
 
   async create(body: unknown): Promise<Release> {
