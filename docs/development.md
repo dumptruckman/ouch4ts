@@ -63,10 +63,14 @@ current build without creating a tarball.
 
 Apply exactly one release label to each PR:
 
-- `release:major` for a major release.
-- `release:minor` for a minor release, including breaking changes during `0.x`.
-- `release:patch` for a compatible patch release.
+- `release:major` for the first stable major version or a breaking change after `1.0.0`.
+- `release:minor` for a compatible feature or a breaking change during `0.x`.
+- `release:patch` for a compatible fix, including a correction to match a published scoring rule.
 - `no release` when the change does not require publication.
+
+For a scoring fix, name the affected metric and case in the PR title so they
+appear in the changelog. See the [compatibility policy](library.md#compatibility)
+when changing an existing scoring rule.
 
 For `maintenance/<major>.<minor>` branches, use only `release:patch` or `no release`.
 Do not write changeset files for ordinary changes. Labels determine versions,

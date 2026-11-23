@@ -45,5 +45,20 @@ The [function fields](cli.md#function-fields) describe each entry.
 
 ## Compatibility
 
-During `0.x`, breaking changes to the API, CLI, returned metrics, or saved JSON
-require a minor release. Patch releases preserve compatibility.
+The public contract covers the package's root exports and their types, documented
+CLI and configuration behavior, returned metrics, and saved JSON formats.
+Starting with `1.0.0`, breaking changes require a major release. Minor releases
+can add compatible features. Patch releases can fix bugs.
+
+The [measurement conventions](measurement.md) define how the analyzer calculates
+each metric. Changing a rule for an existing metric requires a major release.
+For example, excluding nested callbacks from their enclosing function's
+cognitive complexity would change that rule.
+
+A patch can correct a calculation that disagrees with a published rule. The
+same source and coverage can then produce a different score after an upgrade.
+Release notes for scoring fixes identify the affected metrics and the cases
+where scores can change.
+
+During `0.x`, breaking changes require a minor release. Patch releases preserve
+compatibility.
