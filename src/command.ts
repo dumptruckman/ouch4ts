@@ -79,10 +79,9 @@ Diagnostics and command output use stderr. Failures exit 1; unknown coverage sta
 CLI reference: ${fileURLToPath(new URL("../docs/cli.md", import.meta.url))}`);
     return;
   }
+  const analyzerVersion = await readAnalyzerVersion();
   if (values.version) {
-    const manifest = await readManifest(fileURLToPath(new URL("../", import.meta.url)));
-    if (typeof manifest.version !== "string") throw new Error("Package version is missing");
-    console.log(manifest.version);
+    console.log(analyzerVersion);
     return;
   }
   validateReportMode(values);
@@ -92,9 +91,10 @@ CLI reference: ${fileURLToPath(new URL("../docs/cli.md", import.meta.url))}`);
   const config = await loadConfiguration(cwd, configPath, values["no-config"] ?? false);
   const options = projectOptions(values, cwd, config);
   if (values.compare !== undefined) {
-    const report = await compareProject(values.compare, {
+    const comparison = await compareProject(values.compare, {
       ...options, refresh: values.refresh ?? false,
     });
+    const report = { analyzerVersion, ...comparison };
     await writeReport(options.outputDir, "ouch-comparison.json", report);
     const files = report.files.filter(entry => matchesPath(entry.file, positionals));
     const entries = report.entries.filter(entry => matchesPath(entry.file, positionals));
@@ -102,7 +102,7 @@ CLI reference: ${fileURLToPath(new URL("../docs/cli.md", import.meta.url))}`);
       : formatFileComparison(files) + "\n\n" + formatComparison(entries));
     return;
   }
-  await reportCurrent(options, values.since, positionals, format);
+  await reportCurrent(options, values.since, positionals, format, analyzerVersion);
 }
 
 function reportFormat(value: string | undefined) {
@@ -111,16 +111,24 @@ function reportFormat(value: string | undefined) {
   throw new Error("--format must be table or json");
 }
 
+async function readAnalyzerVersion() {
+  const manifest = await readManifest(fileURLToPath(new URL("../", import.meta.url)));
+  if (typeof manifest.version !== "string") throw new Error("Package version is missing");
+  return manifest.version;
+}
+
 async function reportCurrent(options: ReturnType<typeof projectOptions>, since: string | undefined,
-  positionals: string[], format: ReturnType<typeof reportFormat>) {
+  positionals: string[], format: ReturnType<typeof reportFormat>, analyzerVersion: string) {
   const changes = since === undefined ? undefined : changedSourceFilter(since, options.cwd);
-  const report = await analyzeProject(options);
+  const metrics = await analyzeProject(options);
+  const report = { analyzerVersion, ...metrics };
   await writeReport(options.outputDir, "ouch.json", report);
   const entries = report.entries.filter(entry => changes?.matchesFunction(entry) ?? true)
     .filter(entry => matchesPath(entry.file, positionals));
   const files = report.files.filter(entry => changes?.matchesFile(entry.file) ?? true)
     .filter(entry => matchesPath(entry.file, positionals));
-  console.log(format === "json" ? JSON.stringify({ entries, files }) : formatFiles(files) + "\n\n" + formatReport(entries));
+  console.log(format === "json" ? JSON.stringify({ ...report, entries, files })
+    : formatFiles(files) + "\n\n" + formatReport(entries));
   warnUnknownCoverage(report.entries);
 }
 

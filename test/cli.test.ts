@@ -148,10 +148,11 @@ test("emits filtered JSON with table ordering, complete saved reports, and warni
   });
   const result = await run(cwd, "--use-existing-coverage", "--format", "json", "orders");
   expect(result.status, result.stderr).toBe(0);
-  const selected: ReturnType<typeof analyzeReport> = JSON.parse(result.stdout);
-  expect(selected).toEqual({ entries: [expect.objectContaining({ name: "price", ouch: 3 })],
+  expect(JSON.parse(result.stdout)).toEqual({ analyzerVersion: packageMetadata.version,
+    entries: [expect.objectContaining({ name: "price", ouch: 3 })],
     files: [{ file: "src/orders.ts", complexity: 2, cognitive: 1, functions: 1 }] });
-  expect(readCurrentReport(cwd).entries).toHaveLength(2);
+  expect(readCurrentReport(cwd)).toMatchObject({ analyzerVersion: packageMetadata.version,
+    entries: [{ name: "price" }, { name: "unknown" }] });
   expect(result.stderr).toMatch(/1 functions.*N\/A/);
   const all = await run(cwd, "--use-existing-coverage", "--format", "json");
   expect(JSON.parse(all.stdout)).toEqual(readCurrentReport(cwd));
@@ -558,14 +559,19 @@ test("uses launching config for both comparison checkouts with custom report sto
   const args = ["--project", "packages/app", "--config", "shared.json", "--compare", "base", "--format", "json"];
   const first = await run(repository, ...args, "missing-file");
   expect(first.status, first.stderr).toBe(0);
-  expect(JSON.parse(first.stdout)).toEqual({ base: git(cwd, "rev-parse", "base").trim(),
-    head: git(cwd, "rev-parse", "HEAD").trim(), entries: [], files: [] });
+  expect(JSON.parse(first.stdout)).toEqual({
+    analyzerVersion: packageMetadata.version,
+    base: git(cwd, "rev-parse", "base").trim(), head: git(cwd, "rev-parse", "HEAD").trim(), entries: [], files: [],
+  });
   expect(first.stderr).toMatch(/N\/A coverage/);
   const reportPath = join(cwd, "reports/metrics/ouch-comparison.json");
-  expect(JSON.parse(readFileSync(reportPath, "utf8"))).toMatchObject({ entries: expect.arrayContaining([
-    expect.objectContaining({ name: "price" }), expect.objectContaining({ name: "removed" }),
-    expect.objectContaining({ name: "added" }),
-  ]) });
+  expect(JSON.parse(readFileSync(reportPath, "utf8"))).toMatchObject({
+    analyzerVersion: packageMetadata.version,
+    entries: expect.arrayContaining([
+      expect.objectContaining({ name: "price" }), expect.objectContaining({ name: "removed" }),
+      expect.objectContaining({ name: "added" }),
+    ]),
+  });
   expect(existsSync(join(cwd, ".metrics"))).toBe(false);
   expect(readdirSync(join(cwd, "reports/metrics/cache"))).toHaveLength(2);
   const calls = readFileSync(join(cwd, "calls.log"), "utf8");
@@ -767,7 +773,7 @@ test("compare reuses commit reports until refresh is requested", async () => {
 
 test("comparison cache tracks added and edited analyzer implementation files", () => {
   const cwd = comparisonProject();
-  const analyzer = project({ "package.json": '{"type":"module"}' });
+  const analyzer = project({ "package.json": '{"type":"module","version":"1.0.0-preview.1"}' });
   cpSync(join(root, "dist"), join(analyzer, "dist"), { recursive: true });
   const nodeModules = dirname(dirname(fileURLToPath(import.meta.resolve("typescript/package.json"))));
   symlinkSync(nodeModules, join(analyzer, "node_modules"), "dir");
@@ -775,6 +781,7 @@ test("comparison cache tracks added and edited analyzer implementation files", (
     "--setup-command", "node setup.cjs", "--coverage-command", "node cover.cjs"], { cwd, encoding: "utf8" });
   const first = compare();
   expect(first.status, first.stderr).toBe(0);
+  expect(readComparisonReport(cwd)).toMatchObject({ analyzerVersion: "1.0.0-preview.1" });
 
   const implementation = join(analyzer, "dist/helpers/extra.js");
   mkdirSync(dirname(implementation));
@@ -787,9 +794,11 @@ test("comparison cache tracks added and edited analyzer implementation files", (
   const edited = compare();
   expect(edited.status, edited.stderr).toBe(0);
   expect(edited.stderr.match(/Analyzing /g)).toHaveLength(2);
-  const unchanged = compare();
-  expect(unchanged.status, unchanged.stderr).toBe(0);
-  expect(unchanged.stderr.match(/Using cached report/g)).toHaveLength(2);
+  writeFileSync(join(analyzer, "package.json"), '{"type":"module","version":"1.0.0"}');
+  const versionOnlyChange = compare();
+  expect(versionOnlyChange.status, versionOnlyChange.stderr).toBe(0);
+  expect(versionOnlyChange.stderr.match(/Using cached report/g)).toHaveLength(2);
+  expect(readComparisonReport(cwd)).toMatchObject({ analyzerVersion: "1.0.0" });
 });
 
 test("comparison exclusions use project-relative paths and separate reusable caches", async () => {
