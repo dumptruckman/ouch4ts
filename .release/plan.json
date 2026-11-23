@@ -1,25 +1,37 @@
 {
   "branch": "main",
   "baseline": {
-    "tag": "v0.1.2",
-    "source": "a2e755ff2b2db2e1864dd5fb7b6ea4bb02119608",
-    "version": "0.1.2"
+    "tag": "v0.1.3",
+    "source": "0534b9657619214fb326108ed5300feca7d33e78",
+    "version": "0.1.3"
   },
-  "source": "420fa261d477ef2d6413a6c1ac92b40018d9e9c8",
+  "source": "b26cc26951a516c80632f3361cfaa84c013f84b8",
   "changes": [
     {
-      "number": 23,
-      "title": "Wait for npm dist-tag updates to become visible",
-      "body": "## Summary\n\nnpm accepted the `latest` update for `0.1.2`, but the next registry read still showed a different value. The release job stopped before creating the Git tag and publishing the GitHub release. [Failed release attempt](https://github.com/dumptruckman/ouch4ts/actions/runs/45234959803/job/137904099153)\n\n```text\nWrite the dist-tag once → read it immediately → retry reads every five seconds if needed\n```\n\nThe workflow logs stale or missing values and the version it eventually confirms. After five minutes it reports the last reason confirmation was pending and points to the original run for recovery.\n\n## Evidence\n\nThe regression test reproduced the production error with one stale read. It now verifies that the release finishes after exactly one tag update. Deadline tests cover both a stale version and a missing tag.\n\nAll 374 tests, typecheck, and build passed.\n\n## Merge danger\n\nThe change affects npm release automation. Merging with `release:patch` triggers a preview. The rolling release PR controls stable publication.\n",
-      "url": "https://github.com/dumptruckman/ouch4ts/pull/23",
+      "number": 25,
+      "title": "Label preview drafts and promote the newest stable release",
+      "body": "## Summary\n\nRecovery drafts used commit SHAs as titles, and the workflow explicitly disabled Latest for every stable release.\n\n| When | GitHub release update |\n| --- | --- |\n| A PR merges | Name the recovery draft with the PR number and title. |\n| npm verifies a preview | Rename the same draft with the npm version and PR number, and mark it Pre-release. |\n| A stable release publishes | Set Latest if this is the highest published stable version. Older maintenance releases preserve the badge. |\n\n## Evidence\n\nThe release-command test reproduced the missing preview label. It now verifies that a retry preserves the draft, its original tag, and its assets without creating a second entry. Stable release tests cover promotion and recovery after a newer version has shipped. Typechecking and all 374 tests passed.\n\n## Merge Danger\n\nThe change is reversible and affects GitHub release metadata. Reverting restores the previous behavior for future runs. Maintainers can edit titles and labels already applied.\n",
+      "url": "https://github.com/dumptruckman/ouch4ts/pull/25",
       "labels": [
-        "release:patch"
+        "no release"
       ],
-      "head": "jwood/retry-release-tag-confirmation",
+      "head": "jwood/github-release-labels",
+      "repository": "dumptruckman/ouch4ts",
+      "author": "dumptruckman"
+    },
+    {
+      "number": 26,
+      "title": "Record the analyzer version in JSON reports and define v1 scoring compatibility",
+      "body": "## Summary\n\nAn old JSON report gives you no way to tell which version of ouch4ts generated it. Current and comparison reports now include `analyzerVersion` on disk and in JSON stdout, even when a filter matches nothing.\n\n```json\n{ \"analyzerVersion\": \"0.1.3\", \"entries\": [], \"files\": [] }\n```\n\nThe v1 compatibility policy covers the CLI, typed API, and saved report formats. Changing an existing scoring rule requires a major release. A patch can fix a calculation to match a published rule. Its release notes identify which scores can change.\n\n## Evidence\n\n- The current and comparison report tests failed on the missing field before the change. Both now check the saved file and filtered stdout against the package version.\n- A comparison test changes the installed analyzer version and reuses both cached revisions. The new report records the running version.\n- Typecheck and all 374 tests passed after rebasing onto `main`.\n\n## Merge danger\n\nMerging with `release:major` publishes an npm preview and prepares the rolling release PR for `1.0.0`. Merging that separate PR publishes the stable package.\n",
+      "url": "https://github.com/dumptruckman/ouch4ts/pull/26",
+      "labels": [
+        "release:major"
+      ],
+      "head": "jwood/v1-compatibility",
       "repository": "dumptruckman/ouch4ts",
       "author": "dumptruckman"
     }
   ],
-  "bump": "patch",
-  "version": "0.1.3"
+  "bump": "major",
+  "version": "1.0.0"
 }

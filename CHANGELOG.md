@@ -1,5 +1,11 @@
 # ouch4ts
 
+## 1.0.0
+
+### Major Changes
+
+- [Record the analyzer version in JSON reports and define v1 scoring compatibility](https://github.com/dumptruckman/ouch4ts/pull/26)
+
 ## 0.1.3
 
 ### Patch Changes
