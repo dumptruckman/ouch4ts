@@ -5,6 +5,8 @@ TypeScript, and mixed projects. It provides a CLI, a typed ESM API, and an
 [agent skill](skills/ouch4ts/SKILL.md).
 The analyzer requires Node 22 or newer.
 
+Run `npx ouch4ts --help` to list the CLI options.
+
 OUCH stands for Overall Upkeep and Change Hassle. It adds cognitive complexity to
 CRAP, Change Risk Anti-Patterns:
 
