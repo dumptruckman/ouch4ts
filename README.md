@@ -5,7 +5,8 @@ TypeScript, and mixed projects. It provides a CLI, a typed ESM API, and an
 [agent skill](skills/ouch4ts/SKILL.md).
 The analyzer requires Node 22 or newer.
 
-Run `npx ouch4ts --help` to list the CLI options.
+Run your project's installed `ouch4ts` with `--help` to list the CLI options.
+For a one-off run, use `npx --yes ouch4ts@latest --help`.
 
 OUCH stands for Overall Upkeep and Change Hassle. It adds cognitive complexity to
 CRAP, Change Risk Anti-Patterns:
@@ -27,7 +28,7 @@ and [SonarSource's Cognitive Complexity whitepaper, version 1.7](https://www.son
 The guides and references cover these tasks and details:
 
 - [Analyze a project](docs/analyze-project.md):
-  build the analyzer, generate reports, compare commits, and install the agent skill.
+  run the published analyzer, compare commits, and install the standalone agent skill.
 - [CLI reference](docs/cli.md):
   options, configuration, report fields, filtering, and exit codes.
 - [Library reference](docs/library.md):

@@ -1,8 +1,16 @@
 # Develop and package ouch4ts
 
-Run development commands from the repository root. Use
-[Build the analyzer](analyze-project.md#build-the-analyzer) to select Node,
-install dependencies, and compile the package.
+## Build the analyzer
+
+From the repository root, select the development Node version, install the
+locked dependencies, and compile the CLI.
+
+```bash
+nvm use
+npm ci --ignore-scripts
+npm run build
+node dist/cli.js --help
+```
 
 ## Check a change
 

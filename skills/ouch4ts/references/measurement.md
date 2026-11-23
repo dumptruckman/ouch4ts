@@ -77,22 +77,6 @@ Excluded directory names are `node_modules`, `.git`, `dist`, `build`, `coverage`
 Source roots are explicit. Discovery does not use `tsconfig` or `jsconfig`
 inclusion and exclusion rules.
 
-### Exclusion globs
-
-Repeated `--exclude '<glob>'` options add exclusions. Patterns match
-project-relative paths using `/` separators, regardless of the source roots.
-`**/generated/**` skips generated directories.
-`**/*.generated.{js,ts}` skips matching filenames.
-
-Matching includes hidden files and directories and is case-sensitive. A leading
-`!` is literal and does not re-include files. Matched directories are pruned.
-Matched files are skipped before reading or parsing and appear in neither the
-table nor saved metrics.
-
-Exclusions apply to normal reports, `--since`, and both revisions of `--compare`.
-Shell examples quote patterns to prevent shell expansion. Coverage commands use
-their own inclusion and exclusion settings.
-
 ### Syntax and function identity
 
 The analyzer checks syntax according to each file's extension. It uses

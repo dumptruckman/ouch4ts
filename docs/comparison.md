@@ -9,18 +9,17 @@ available locally. `--compare <ref>` resolves the merge base with committed
 `HEAD`. Local source edits and untracked files are excluded. Use `--since` for
 current scores in working-copy changes.
 
-Run from the target project directory:
+With a project-local npm installation, run from the target project directory.
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --compare origin/develop \
+./node_modules/.bin/ouch4ts --compare origin/develop \
 	--coverage-command 'npm run test:cov -- --runInBand --coverageReporters=lcov'
 
 # Regenerate reports after changes to external configuration or environment
-node /absolute/path/to/ouch4ts/dist/cli.js --compare origin/develop --refresh \
+./node_modules/.bin/ouch4ts --compare origin/develop --refresh \
 	--coverage-command 'npm run test:cov -- --runInBand --coverageReporters=lcov'
 ```
 
-Replace `/absolute/path/to/ouch4ts` with the resolved analyzer checkout root.
 On a cache miss, the analyzer creates a temporary detached Git worktree for that
 commit. It runs setup and fresh coverage, scores all configured sources, then
 removes the worktree. The original checkout stays on its branch with local edits
@@ -29,9 +28,7 @@ intact. When base and head are the same commit, one report supplies both sides.
 Before running a comparison, inspect both revisions' manifests, lockfiles, test
 scripts, and coverage configuration. Each revision must declare compatible
 runner and provider dependencies and support LCOV through existing settings or
-command-line options. If either revision lacks a prerequisite, stop and identify
-the revision and required setup change. Installed tools in the original checkout
-do not satisfy these checks.
+command-line options. Each worktree needs its own dependencies.
 
 Setup and coverage defaults use
 [package-manager detection](coverage.md#choose-a-command) independently in each
@@ -65,21 +62,19 @@ The package managers document their install options:
 - [Bun install options](https://bun.com/docs/pm/cli/install).
 
 Supply `--setup-command` to override installation or add existing build steps
-that write generated output. Follow the [project write policy](../SKILL.md#project-writes)
-and keep the lockfile unchanged. Supply `--coverage-command` for the project's
-coverage script or installed runner. Both overrides apply to both revisions and
+that write generated output. Use a command that preserves each worktree's lockfile.
+Supply `--coverage-command` for the project's coverage script or installed runner. Both overrides apply to both revisions and
 bypass their respective defaults. For example:
 
 ```bash
-node /absolute/path/to/ouch4ts/dist/cli.js --compare origin/main \
+./node_modules/.bin/ouch4ts --compare origin/main \
 	--setup-command 'pnpm install --frozen-lockfile --ignore-scripts && pnpm run build' \
 	--coverage-command 'pnpm run coverage'
 ```
 
 Both commands run in each revision's project directory and inherit the launching
 environment. Use a runtime compatible with both revisions. If the revisions need
-different runtimes, select each runtime in the commands using the user's or
-project's setup instructions.
+different runtimes, select the appropriate runtime inside the setup and coverage commands.
 
 Ignored files, including `.env` and local registry configuration, are absent from
 fresh worktrees. Supply required test configuration through the environment or
@@ -119,16 +114,13 @@ Environment values and external services are outside the fingerprint. When those
 inputs have changed or a test run was nondeterministic, use `--refresh`. A cache
 hit does not establish that external test conditions are unchanged.
 
-Treat the cache as disposable local output. When tracking other metrics,
-recommend excluding `<output-dir>/cache/` from version control. Leave ignore-file
-edits to a separate setup request.
+The cache is disposable. If you track other metrics, you can exclude
+`<output-dir>/cache/` in your ignore file.
 
 ### Cache diagnostics
 
 The CLI prints `Using cached report for <commit-sha>` when reusing a commit
-report and `Analyzing <commit-sha>` when generating one. Record the diagnostics
-for each distinct commit. Describe a report as regenerated only after the
-comparison succeeds. When base and head are the same commit, one report supplies
+report and `Analyzing <commit-sha>` when starting a fresh analysis. When base and head are the same commit, one report supplies
 both sides. `--refresh` regenerates all distinct commit reports.
 
 ### Report fields
