@@ -1,5 +1,11 @@
 # ouch4ts
 
+## 0.1.3
+
+### Patch Changes
+
+- [Wait for npm dist-tag updates to become visible](https://github.com/dumptruckman/ouch4ts/pull/23)
+
 ## 0.1.2
 
 ### Patch Changes

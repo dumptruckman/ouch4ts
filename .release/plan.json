@@ -1,25 +1,25 @@
 {
   "branch": "main",
   "baseline": {
-    "tag": "v0.1.1",
-    "source": "19b9d8e57549e590666f4b783842ce497eafbe06",
-    "version": "0.1.1"
+    "tag": "v0.1.2",
+    "source": "a2e755ff2b2db2e1864dd5fb7b6ea4bb02119608",
+    "version": "0.1.2"
   },
-  "source": "60208c8b1b5a971b9dbe537f71d8463fb7493f99",
+  "source": "420fa261d477ef2d6413a6c1ac92b40018d9e9c8",
   "changes": [
     {
-      "number": 21,
-      "title": "Use the published analyzer in the skill and ship its guides",
-      "body": "## Summary\n\nA copied OUCH skill required a built checkout, and the npm package omitted the guides its README linked to. The skill now uses the published analyzer and can open the matching docs offline.\n\n```text\nProject or workspace has ouch4ts → use the installed version\nAnalyzer missing                 → ask before installing or running npx once\nNeed the full CLI reference     → open the local path printed by --help\n```\n\nThe release check requires all six analyzer guides in the tarball. The 0BSD skill stays separate from the MIT package. The repository instructions also direct agents to fetch origin and start new work on a branch based on origin/main.\n\n## Evidence\n\n- A workspace used its installed 0.1.0 with 0.1.1 already in npm's cache. A one-off report using existing coverage added only `.metrics/ouch.json`.\n- Installed the new tarball locally, in a workspace, and with offline `npx`. Each invocation found its CLI reference. All 17 relative links and anchors in the packaged docs resolved.\n- Typecheck, build, and all 371 tests passed. The release check rejected both a missing coverage guide and an unexpected contributor guide.\n\n## Merge danger\n\nMerging with `release:patch` triggers an npm preview. The separate rolling release PR controls stable publication.\n\nImplements [Switch the BSD0 skill to the published npm analyzer](https://github.com/dumptruckman/ouch4ts/issues/13).\n",
-      "url": "https://github.com/dumptruckman/ouch4ts/pull/21",
+      "number": 23,
+      "title": "Wait for npm dist-tag updates to become visible",
+      "body": "## Summary\n\nnpm accepted the `latest` update for `0.1.2`, but the next registry read still showed a different value. The release job stopped before creating the Git tag and publishing the GitHub release. [Failed release attempt](https://github.com/dumptruckman/ouch4ts/actions/runs/45234959803/job/137904099153)\n\n```text\nWrite the dist-tag once → read it immediately → retry reads every five seconds if needed\n```\n\nThe workflow logs stale or missing values and the version it eventually confirms. After five minutes it reports the last reason confirmation was pending and points to the original run for recovery.\n\n## Evidence\n\nThe regression test reproduced the production error with one stale read. It now verifies that the release finishes after exactly one tag update. Deadline tests cover both a stale version and a missing tag.\n\nAll 374 tests, typecheck, and build passed.\n\n## Merge danger\n\nThe change affects npm release automation. Merging with `release:patch` triggers a preview. The rolling release PR controls stable publication.\n",
+      "url": "https://github.com/dumptruckman/ouch4ts/pull/23",
       "labels": [
         "release:patch"
       ],
-      "head": "jwood/package-analyzer-docs",
+      "head": "jwood/retry-release-tag-confirmation",
       "repository": "dumptruckman/ouch4ts",
       "author": "dumptruckman"
     }
   ],
   "bump": "patch",
-  "version": "0.1.2"
+  "version": "0.1.3"
 }
